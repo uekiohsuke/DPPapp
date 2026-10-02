@@ -44,28 +44,70 @@ class UriLang:
     vowel_initial: list[str] = field(default_factory=lambda: list(DEFAULT_VOWEL_INITIAL))
     rules: Rules | None = None
 
+    # 規則ファイルから読んだ、検査で使う一覧
+    particles: dict[str, str] = field(default_factory=dict)          # 情詞 → 意味
+    old_forms: dict[str, tuple[str, str]] = field(default_factory=dict)  # 近現代の形 → (現代の形, 意味)
+    old_prefixes: dict[str, str] = field(default_factory=dict)        # 古い接頭辞 → 今の接頭辞(xa- → xu-)
+    avoid: list[str] = field(default_factory=list)                    # 造語で避ける並び(C は子音)
+    vowel_fixes: list[tuple[str, str]] = field(default_factory=list)  # 発音しにくい並びの直し方(iyi → iya)
+    checks: set[str] | None = None                                    # 規則ファイルの checks の id(なければ None)
+
     @classmethod
     def from_rules(cls, r: Rules | None) -> "UriLang":
+        """規則ファイル(uri-rules.yaml の形)から読む。項目がなければ、文法 md 1〜2章の初期値のまま"""
         lang = cls(rules=r)
         if r is None:
             return lang
         ph = r.get("phonology", default={}) or {}
-        if ph.get("vowels"):
-            lang.vowels = [str(v) for v in ph["vowels"]]
-        cons = ph.get("consonants")
-        if isinstance(cons, dict):
-            lang.consonants = [str(c) for g in cons.values() for c in (g or [])]
-        elif cons:
-            lang.consonants = [str(c) for c in cons]
-        syl = r.get("syllable", default={}) or {}
-        if syl.get("codas"):
-            lang.codas = [str(c) for c in syl["codas"]]
-        if syl.get("vowel_initial_words") is not None:
-            lang.vowel_initial = [str(w) for w in syl["vowel_initial_words"] or []]
-        pre = r.get("affixes", "prefix", "forms", default=None)
-        if pre:
-            lang.prefixes = {str(k): str(v) for k, v in pre.items()}
+        general = ph.get("general") or {}
+        if general.get("vowels"):
+            lang.vowels = [str(v) for v in general["vowels"]]
+        if general.get("consonants"):
+            special = ph.get("special") or {}
+            # 綴りに使うもの: 一般的な子音と、特殊な音のうち使われるもの(x は音素ではないが綴りには使う)
+            lang.consonants = [str(c) for c in general["consonants"]] + \
+                              [str(k) for k, v in special.items() if (v or {}).get("used", True)]
+        syl = ph.get("syllable") or {}
+        if syl.get("units"):
+            # CVn、CVng → n、ng
+            lang.codas = [str(u)[2:] for u in syl["units"] if str(u).startswith("CV") and str(u) != "CV"]
+        if syl.get("initial_w_omission") is not None:
+            lang.vowel_initial = [str(w) for w in syl["initial_w_omission"] or []]
+        forms = r.get("prefixes", "forms", default=None)
+        if isinstance(forms, list) and forms:
+            lang.prefixes = {}
+            for f in forms:
+                key = str(f.get("form", "")).strip("-")
+                name = f"{f.get('pos', '')}({f.get('noun_name', '')})" if f.get("noun_name") else str(f.get("pos", ""))
+                lang.prefixes[key] = f"{lang.prefixes[key]}/{name}" if key in lang.prefixes else name
+        for words in (r.get("particles", "categories", default={}) or {}).values():
+            lang.particles.update({str(k): str(v) for k, v in (words or {}).items()})
+        for old, v in (r.get("history", "semivowel_insertion", default={}) or {}).items():
+            lang.old_forms[str(old)] = (str((v or {}).get("to", "")), str((v or {}).get("meaning", "")))
+        for old, new in (r.get("history", "changes", "demonstratives", default={}) or {}).items():
+            lang.old_forms[str(old)] = (str(new), "指示詞")
+        pp = r.get("history", "changes", "passive_prefix", default=None)
+        if isinstance(pp, dict) and pp.get("from"):
+            lang.old_prefixes[str(pp["from"]).strip("-")] = str(pp.get("to", "")).strip("-")
+        lang.avoid = [str(s) for s in r.get("compounding", "avoid_sequences", default=[]) or []]
+        lang.vowel_fixes = [(str(v["from"]), str(v["to"])) for v in r.get("compounding", "vowel_sequence", default=[]) or []
+                            if isinstance(v, dict) and v.get("from")]
+        checks = r.get("checks", default=None)
+        if isinstance(checks, list):
+            lang.checks = {str(c.get("id")) for c in checks if isinstance(c, dict) and c.get("id")}
         return lang
+
+    def enabled(self, check_id: str) -> bool:
+        """規則ファイルの checks にある検査か(規則ファイルがなければ、音節の検査だけ)"""
+        if self.checks is None:
+            return check_id == "syllable_segmentation"
+        return check_id in self.checks
+
+    def avoid_patterns(self) -> list:
+        """避ける並び(Cuwu の C は子音)を正規表現にする"""
+        import re
+        cons = "|".join(re.escape(c) for c in sorted(self.consonants, key=len, reverse=True))
+        return [(s, re.compile(re.escape(s).replace("C", f"(?:{cons})"))) for s in self.avoid]
 
     # ---------- 旧表記 → 現代の転写 ----------
 

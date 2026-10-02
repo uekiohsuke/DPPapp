@@ -104,12 +104,15 @@ LLM の接続先とモデルは `%APPDATA%\conlang\llm.json` に保存します(
 conlang new projects\uri --name ウリ語 --language uri
 conlang import projects\uri data\uri.json
 conlang grammar import projects\uri data\uri-grammar.md
-conlang rules import projects\uri data\uri-rules.yaml      # 文法 md から写した下書き(status はすべて「仮」)
+conlang rules import projects\uri data\uri-rules.yaml
+conlang grammar check projects\uri                         # 文法 md と規則ファイルの照合(どの言語でも使える)
+conlang uri --project projects\uri particles               # 情詞の一覧と、辞書にあるか
 conlang uri --project projects\uri modern SuKaHuDu FoTONe  # 辞書の旧表記 → 現代の転写(sukahudu、fotoone)
 conlang uri --project projects\uri syllables KanTi ReWing  # 音節(CV、CVn、CVng)
 conlang uri --project projects\uri analyze LoRoPu          # 接頭辞(lo-)と残り(ropu)を、辞書と照らす
 conlang uri --project projects\uri find 女装
-conlang check projects\uri                                 # 音節に分けられない語(近現代の形など)、旧表記の大文字の位置
+conlang check projects\uri                                 # 音節に分けられない語(近現代の形には現代の形を添える)、旧表記の大文字の位置、
+                                                           # 接頭辞、iyi・Cuwu の並び、情詞の一覧との照合(規則ファイルの checks)
 ```
 
 辞書は、元のファイルの書式(Python 風の字下げ / zpdic の書き出し形式、改行コード、末尾の改行)に合わせて書き戻すので、

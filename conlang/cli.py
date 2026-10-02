@@ -8,6 +8,7 @@
   conlang rules import DIR FILE                      規則ファイル(YAML)を取り込む(元のファイルはコピーするだけ)
   conlang rules show DIR|FILE [--all]                「決定」以外の規則の一覧と、言語別の点検
   conlang grammar import DIR FILE                    文法文書(Markdown)をプロジェクトの grammar/ に取り込む
+  conlang grammar check DIR [--llm | --prompt-only]  文法文書と規則ファイルの食い違い(目印と ref、表、LLM で文章)
   conlang check DIR|FILE [--rules FILE] [--language ID] [--errors-only]
                                                      辞書の整合性チェック(誤記、旧用語、音素、似た綴り など)
   conlang llm config [--url URL] [--model M]         LLM の接続先(OpenAI 互換)を見る・設定する
@@ -143,6 +144,26 @@ def cmd_grammar_import(a) -> int:
     if bak:
         print(f"  前の文書のバックアップ: {bak}")
     return 0
+
+
+def cmd_grammar_check(a) -> int:
+    from .core import grammar_check as GC
+    p = Project.open(a.dir)
+    lang = registry.get(a.language or p.language)
+    if lang is None or lang.grammar_table_checks is None:
+        print(f"言語別の表の比べ方がない(言語: {a.language or p.language or 'なし'})。目印と ref の対応だけを調べる")
+        checks = {}
+    else:
+        checks = lang.grammar_table_checks
+    ctx = registry.Context(p.load_dictionary(), p.load_rules(), p)
+    if a.rules:
+        ctx.rules = Rules.load(a.rules)
+    argv = [x for x in (["--grammar", a.grammar] if a.grammar else [])]
+    argv += ["--prompt-only"] if a.prompt_only else []
+    argv += ["--llm"] if a.llm else []
+    argv += ["--response", a.response] if a.response else []
+    argv += ["--force"] if a.force else []
+    return GC.run_cli(argv, ctx, checks)
 
 
 def cmd_check(a) -> int:
@@ -288,6 +309,16 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("dir")
     t.add_argument("file")
     t.set_defaults(func=cmd_grammar_import)
+    t = gsub.add_parser("check", help="文法文書と規則ファイルの食い違いを調べる(言語の表の比べ方を使う)")
+    t.add_argument("dir")
+    t.add_argument("--grammar", help="文法文書(省くと、規則ファイルの grammar_doc か grammar/ の唯一の .md)")
+    t.add_argument("--rules")
+    t.add_argument("--language", help="表の比べ方の言語(省くと、プロジェクトの言語)")
+    t.add_argument("--prompt-only", action="store_true", help="文章の記述を LLM に調べさせるプロンプトを出す")
+    t.add_argument("--llm", action="store_true", help="LLM に問い合わせる")
+    t.add_argument("--response", help="別のチャットの答えを読み込む")
+    t.add_argument("--force", action="store_true", help="前回から変わっていなくても LLM に調べさせる")
+    t.set_defaults(func=cmd_grammar_check)
     s = sub.add_parser("check", help="辞書の整合性チェック")
     s.add_argument("target", help="プロジェクトのフォルダか、辞書ファイル")
     s.add_argument("--rules", help="規則ファイル(プロジェクトなら省ける)")

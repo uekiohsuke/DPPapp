@@ -298,7 +298,7 @@ def cmd_decompose(args, c: K.Coiner, ctx: Context) -> int:
                                   description=req.description, field=req.field, distinguish=req.distinguish,
                                   memo=req.memo)
         print(f"(履歴: {saved})")
-    from .grammar_check import extract_json
+    from conlang.core.grammar_check import extract_json
     try:
         data = extract_json(text)
     except ValueError as err:

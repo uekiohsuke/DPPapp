@@ -1,0 +1,66 @@
+# テスト用の架空の規則ファイル(形は uri-rules.yaml と同じ。情詞・代名詞などの中身は架空)
+language: ウリ語(テスト)
+grammar_doc: mini-uri-grammar.md
+
+phonology:
+  status: 決定
+  ref: {general: phonology.general, special: phonology.special, counts: phonology.notes, syllable: phonology.syllable}
+  general:
+    vowels: {a: "a", e: "e", i: "i", o: "o", u: "u"}
+    consonants: {l: "l", r: "ɹ", m: "m", n: "n", ng: "ŋ", g: "g", s: "s", sh: "ʃ", t: "t", k: "k", p: "p", w: "w", y: "j", d: "d", b: "b", f: "f", v: "v", z: "z", th: "θ"}
+  special:
+    h: {ipa: "x"}
+    j: {ipa: "ʒ"}
+    q: {ipa: "ɢ"}
+    x: {ipa: "ks", phoneme: false}
+    ch: {ipa: "!", used: false}
+  counts: {vowel: 5, consonant_general: 19, consonant_special: 3}
+  syllable:
+    units: [CV, CVn, CVng]
+    initial_w_omission: [uli]
+
+prefixes:
+  status: 決定
+  ref: prefixes
+  forms:
+    - {form: su-, pos: 動詞, noun_name: 状態名詞, meaning: 変化や動作}
+    - {form: lo-, pos: 接続詞, noun_name: 句接続名詞, meaning: 句どうしの関係}
+    - {form: lo-, pos: 文章接続詞, noun_name: 文章接続名詞, meaning: 文章同士の関係}
+
+particles:
+  status: 決定
+  ref: {list: particles.list}
+  count: 3
+  categories:
+    時相: {ni: 架空の過去, tu: 架空の未来}
+    その他: {lu: 架空の否定}
+
+pronouns:
+  status: 決定
+  ref: {personal: pronouns.personal}
+  personal:
+    first: {singular: kaka, plural: kaka}
+    second: {singular: pipo, plural: piposha}
+
+compounding:
+  status: 決定
+  ref: compounding
+  vowel_sequence:
+    - {from: iyi, to: iya}
+  avoid_sequences: ["Cuwu"]
+
+history:
+  status: メモ
+  ref: {semivowel: history.semivowel}
+  changes:
+    passive_prefix: {from: xa-, to: xu-}
+    demonstratives: {sugiri: suri}
+  semivowel_insertion:
+    noe: {to: noye, meaning: 架空の古い接続}
+
+checks:
+  - {id: syllable_segmentation, status: 決定}
+  - {id: known_prefix, status: 決定}
+  - {id: compound_iyi_to_iya, status: 決定}
+  - {id: avoid_cuwu, status: 決定}
+  - {id: particle_known, status: 決定}

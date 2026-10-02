@@ -6,10 +6,11 @@
 """
 from __future__ import annotations
 
+from conlang.core import grammar_check as GC
 from conlang.core.registry import Context, LanguageModule, register
 from conlang.core.zpdic import form, meanings
 
-from . import consistency
+from . import consistency, grammar_check
 from .lang import UriLang
 
 USAGE = """\
@@ -18,6 +19,8 @@ conlang uri [--project DIR | --dict FILE] [--rules FILE] コマンド ...
   syllables 語 …       音節(CV、CVn、CVng)に分ける。旧表記でも現代の転写でもよい
   analyze 語 …         接頭辞(su- など)と残りに分け、辞書の語と照らす
   find キーワード …    訳語に含む語を、現代の転写と一緒に出す
+  particles            規則ファイルの情詞の一覧(辞書にあるかも出す)
+  grammar-check ...    文法 md と規則ファイルの食い違いを調べる(grammar-check --help)
 """
 
 
@@ -49,6 +52,20 @@ def _cli(argv: list[str], ctx: Context) -> int:
         print(USAGE)
         return 0
     cmd, args = argv[0], argv[1:]
+    if cmd == "grammar-check":
+        return GC.run_cli(args, ctx, grammar_check.TABLE_CHECKS)
+    if cmd == "particles":
+        if not lang.particles:
+            print("規則ファイルに情詞の一覧がない(--project か --rules で規則を指定する)")
+            return 2
+        index = _index(ctx, lang)
+        cats = (ctx.rules.get("particles", "categories", default={}) or {}) if ctx.rules else {}
+        for cat, words in cats.items():
+            print(f"■ {cat}")
+            for p, meaning in (words or {}).items():
+                found = _entries(index[p]) if p in index else "(辞書にない)"
+                print(f"  {p}  {meaning}    辞書: {found}")
+        return 0
     if cmd == "modern":
         for a in args:
             print(f"{a}\t{lang.to_modern(a)}")
@@ -95,4 +112,5 @@ def _modern(rules):
 
 register(LanguageModule(id="uri", name="ウリ語", cli=_cli, check_dictionary=consistency.check_dictionary,
                         similar_min_length=7,  # CV の短い語が多く、4文字で1文字違いは普通にある
+                        grammar_table_checks=grammar_check.TABLE_CHECKS,
                         transcriptions={"現代の転写": _modern}))

@@ -22,6 +22,7 @@ from conlang.languages.pute import rules as PR
 
 registry.load_builtin()
 PUTE = registry.get("pute")
+G_TEXT_EMPTY = "# 空の文法\n"
 
 
 @pytest.fixture
@@ -297,5 +298,6 @@ def test_grammar_import_backs_up(project):
 
 def test_check_rules_hook_registered():
     assert PUTE.check_dictionary is C.check_dictionary
-    assert PUTE.check_grammar is G.check_tables
+    assert PUTE.grammar_table_checks is G.TABLE_CHECKS
+    assert PUTE.check_grammar(G_TEXT_EMPTY, Rules({})) == []  # 目印も ref もなければ食い違いはない
     assert PUTE.check_rules is PR.check_rules
