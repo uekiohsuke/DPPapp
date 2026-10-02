@@ -190,30 +190,32 @@ def test_issues_use_rules(win, project):
     assert any("[誤り][旧用語]" in t for t in texts)
 
 
-def test_coining_panel(win, project):
+def run_panel(qtbot, panel, action: int, text: str) -> str:
+    """造語の欄で実行し、裏の処理が終わるまで待って、出力を返す"""
+    panel.action.setCurrentIndex(action)
+    panel.input.setText(text)
+    panel.run()
+    qtbot.waitUntil(lambda: not panel.running, timeout=10000)
+    return panel.output.toPlainText()
+
+
+def test_coining_panel(qtbot, win, project):
     """ピュテ語のプロジェクトでは、造語の欄が出て、編集中の辞書で動く"""
     from conftest import FIXTURES
-    dock = win.language_docks[("pute", "造語")]
-    panel = dock.widget()
-    panel.action.setCurrentIndex(3)  # 形態素分解
-    panel.input.setText("kabotchu")
-    assert "1. kabo + tchu" in panel.run()
-    panel.action.setCurrentIndex(1)  # 組み合わせの検査
-    panel.input.setText("節点 外")
-    assert "すでに辞書にある語" in panel.run()
+    panel = win.language_docks[("pute", "造語")].widget()
+    assert "1. kabo + tchu" in run_panel(qtbot, panel, 3, "kabotchu")      # 形態素分解
+    assert "すでに辞書にある語" in run_panel(qtbot, panel, 1, "節点 外")     # 組み合わせの検査
     # 規則を取り込むと、規則に従って動く(動詞化の sa が部品になる)
     win.answers = [QMessageBox.Yes]
     win.import_rules(FIXTURES / "mini_rules.yaml")
-    panel.input.setText("kabo sa tchu")
-    assert "kabosatchu" in panel.run()
+    assert "kabosatchu" in run_panel(qtbot, panel, 1, "kabo sa tchu")
     # 未保存の編集も使う
     win.new_word()
     win.editor.form.setText("vosa")
     win.editor.translations.add_row("", "新語")
     win.editor.apply_button.click()
-    panel.action.setCurrentIndex(0)
-    panel.input.setText("新語")
-    assert "vosa" in panel.run()
+    assert "vosa" in run_panel(qtbot, panel, 0, "新語")
+    assert panel.status.text().startswith("終わった")
 
 
 def test_relation_link(win):

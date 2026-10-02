@@ -138,6 +138,10 @@ def _cli(argv: list[str], ctx: Context) -> int:
         return 1
 
 
+def _llm_grammar_check(ctx: Context, force: bool) -> int:
+    return _grammar_check(["--llm"] + (["--force"] if force else []), ctx)
+
+
 def _gui_panels():
     from . import gui_coining
     return [("造語", gui_coining.make_panel)]
@@ -145,4 +149,4 @@ def _gui_panels():
 
 register(LanguageModule(id="pute", name="ピュテ語", cli=_cli, check_rules=pute_rules.check_rules,
                         check_dictionary=consistency.check_dictionary, check_grammar=grammar_check.check_tables,
-                        gui_panels=_gui_panels))
+                        llm_grammar_check=_llm_grammar_check, gui_panels=_gui_panels))

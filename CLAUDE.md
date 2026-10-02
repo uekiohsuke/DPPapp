@@ -25,6 +25,7 @@
 - LLM は OpenAI 互換の API を `core/llm.py` で呼ぶ。本人の環境はローカルの Ollama(http://192.168.0.178:11434/v1)。接続先とモデルは利用者の設定(%APPDATA%\conlang\llm.json、`conlang llm config`)で、リポジトリに書かない。テストは偽のサーバーで行い、本物の LLM を前提にしない
 - 造語支援は `conlang/languages/pute/coining.py`(規則ファイルから動くエンジン。結果はデータで返す)と `cli_coining.py`(表示)。試作 `prototype/pute_zougo.py` が更新されたら、その変更をエンジンに移す。規則の解釈は `lang.py`(PuteLang)に集め、整合性チェックと共有する
 - 言語別の画面部品は registry の `gui_panels` から足す(ピュテ語は `gui_coining.py`)。土台の画面に言語別のコードを書かない
+- 画面で LLM など時間のかかる処理は、`conlang/gui/tasks.py` の `run_task` で裏のスレッドに出し、画面を止めない。裏の処理では画面の部品に触らず、辞書は写しを渡す。出力を集めるときは `capture`(スレッドごと。`contextlib.redirect_stdout` はスレッドをまたいで混ざるので使わない)
 - 創作データ(`data/`、`projects/`、文法の Markdown)は git に入れない。テストには `tests/fixtures/` の架空データを使い、実データが必要なテストは `data/` にあるときだけ動かす(skipif)
 
 ## 開発

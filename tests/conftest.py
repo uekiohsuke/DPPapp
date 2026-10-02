@@ -21,6 +21,15 @@ needs_real_pute = pytest.mark.skipif(not REAL_PUTE.exists(), reason="data/second
 needs_real_uri = pytest.mark.skipif(not REAL_URI.exists(), reason="data/uri.json がない")
 
 
+@pytest.fixture(autouse=True)
+def isolated_llm_config(tmp_path, monkeypatch):
+    """利用者の本当の LLM の設定(%APPDATA%\\conlang\\llm.json)を読まない・書かない"""
+    monkeypatch.setenv("CONLANG_CONFIG_DIR", str(tmp_path / "conlang-config"))
+    for name in ("URL", "MODEL", "KEY"):
+        monkeypatch.delenv(f"CONLANG_LLM_{name}", raising=False)
+        monkeypatch.delenv(f"PUTE_LLM_{name}", raising=False)
+
+
 @pytest.fixture
 def mini_pute():
     return FIXTURES / "mini_pute.json"

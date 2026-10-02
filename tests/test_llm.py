@@ -24,7 +24,17 @@ def config_dir(tmp_path, monkeypatch):
 class FakeServer:
     """OpenAI 互換の /models と /chat/completions だけを返す"""
 
-    def __init__(self, reply="こんにちは", status=200):
+    TAGS = {"models": [
+        {"name": "think-model:27b", "size": 17_400_000_000, "capabilities": ["completion", "thinking"],
+         "details": {"parameter_size": "27.8B", "quantization_level": "Q4_K_M"}},
+        {"name": "plain-model:12b", "size": 8_100_000_000, "capabilities": ["completion", "vision"],
+         "details": {"parameter_size": "12.2B", "quantization_level": "Q4_K_M"}},
+        {"name": "embed-model:latest", "size": 600_000_000, "capabilities": ["embedding"],
+         "details": {"parameter_size": "300M"}},
+    ]}
+
+    def __init__(self, reply="こんにちは", status=200, delay=0.0, tags=True):
+        import time as _time
         self.requests = []
         outer = self
 
@@ -42,18 +52,27 @@ class FakeServer:
 
             def do_GET(self):
                 outer.requests.append(("GET", self.path, None, dict(self.headers)))
-                self._send(200, {"data": [{"id": "b-model"}, {"id": "a-model"}]})
+                if self.path == "/api/tags":
+                    if tags:
+                        self._send(200, FakeServer.TAGS)
+                    else:
+                        self._send(404, {"error": "not found"})
+                else:
+                    self._send(200, {"data": [{"id": "b-model"}, {"id": "a-model"}]})
 
             def do_POST(self):
                 n = int(self.headers.get("Content-Length", 0))
                 body = json.loads(self.rfile.read(n))
                 outer.requests.append(("POST", self.path, body, dict(self.headers)))
+                if delay:
+                    _time.sleep(delay)
                 if status != 200:
                     self._send(status, {"error": "だめ"})
                 else:
                     self._send(200, {"choices": [{"message": {"content": reply}}]})
 
-        self.httpd = HTTPServer(("127.0.0.1", 0), Handler)
+        from http.server import ThreadingHTTPServer
+        self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.url = f"http://127.0.0.1:{self.httpd.server_port}/v1"
         threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
 
@@ -90,10 +109,25 @@ def test_chat_and_models(server):
     assert headers["Authorization"] == "Bearer secret"
     assert "reasoning_effort" not in body  # 既定では送らない
     assert llm.list_models(cfg) == ["a-model", "b-model"]
+    infos = {m.id: m for m in llm.list_model_infos(cfg)}  # Ollama の /api/tags から
+    assert set(infos) == {"think-model:27b", "plain-model:12b", "embed-model:latest"}
+    assert infos["think-model:27b"].thinks and infos["think-model:27b"].can_chat
+    assert not infos["embed-model:latest"].can_chat
+    assert infos["think-model:27b"].label() == "think-model:27b  (27.8B、Q4_K_M、17.4GB、考える過程あり)"
     cfg.reasoning_effort = "none"
     llm.chat("質問", cfg)
     body = server.requests[-1][2]
     assert body["reasoning_effort"] == "none" and "response_format" not in body
+
+
+def test_model_infos_fall_back_to_openai_list():
+    """Ollama でない接続先(/api/tags がない)では、/models の id だけ"""
+    s = FakeServer(tags=False)
+    try:
+        infos = llm.list_model_infos(llm.LLMConfig(url=s.url, model="m"))
+        assert [(m.id, m.capabilities, m.can_chat) for m in infos] == [("a-model", None, True), ("b-model", None, True)]
+    finally:
+        s.close()
 
 
 def test_chat_errors(tmp_path):
@@ -112,8 +146,11 @@ def test_chat_errors(tmp_path):
 def test_cli_llm(server, capsys):
     assert main(["llm", "config", "--url", server.url, "--model", "a-model"]) == 0
     assert "保存した" in capsys.readouterr().out
+    assert main(["llm", "config", "--model", "plain-model:12b"]) == 0
     assert main(["llm", "models"]) == 0
-    assert "* a-model" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "* plain-model:12b" in out and "考える過程あり" in out and "embed-model:latest" in out.split("会話に使えないもの")[1]
+    main(["llm", "config", "--model", "a-model"])
     assert main(["llm", "ask", "やあ"]) == 0
     assert "こんにちは" in capsys.readouterr().out
 

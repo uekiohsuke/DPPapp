@@ -96,6 +96,58 @@ def list_models(cfg: LLMConfig | None = None) -> list[str]:
     return sorted(m.get("id", "") for m in data.get("data", []))
 
 
+@dataclass
+class ModelInfo:
+    """モデルの情報。Ollama なら大きさや機能も分かる(ほかの API では id だけ)"""
+    id: str
+    parameter_size: str = ""
+    quantization: str = ""
+    size_bytes: int = 0
+    capabilities: list[str] | None = None  # 例: completion, thinking, vision, embedding。分からなければ None
+
+    @property
+    def can_chat(self) -> bool:
+        return self.capabilities is None or "completion" in self.capabilities
+
+    @property
+    def thinks(self) -> bool:
+        return bool(self.capabilities) and "thinking" in self.capabilities
+
+    def label(self) -> str:
+        bits = [b for b in (self.parameter_size, self.quantization) if b]
+        if self.size_bytes:
+            bits.append(f"{self.size_bytes / 1e9:.1f}GB")
+        if self.thinks:
+            bits.append("考える過程あり")
+        return f"{self.id}  ({'、'.join(bits)})" if bits else self.id
+
+
+def _native_base(cfg: LLMConfig) -> str:
+    """OpenAI 互換の URL(…/v1)から、Ollama 自身の API の URL を作る"""
+    base = cfg.url.rstrip("/")
+    return base[:-3] if base.endswith("/v1") else base
+
+
+def list_model_infos(cfg: LLMConfig | None = None) -> list[ModelInfo]:
+    """モデルの一覧。Ollama なら /api/tags から大きさと機能を取り、それ以外は /models の id だけ"""
+    cfg = cfg or load_config()
+    native = LLMConfig(url=_native_base(cfg), key=cfg.key)
+    try:
+        data = _request(native, "/api/tags", timeout=20)
+        out = []
+        for m in data.get("models", []):
+            d = m.get("details") or {}
+            caps = m.get("capabilities")
+            out.append(ModelInfo(m.get("name") or m.get("model", ""), d.get("parameter_size", ""),
+                                 d.get("quantization_level", ""), int(m.get("size") or 0),
+                                 list(caps) if isinstance(caps, list) else None))
+        if out:
+            return sorted(out, key=lambda x: x.id)
+    except LLMError:
+        pass
+    return [ModelInfo(m) for m in list_models(cfg)]
+
+
 def chat(prompt: str, cfg: LLMConfig | None = None, json_mode: bool = False) -> str:
     """1回だけ問い合わせて、答えの本文を返す"""
     cfg = cfg or load_config()

@@ -227,6 +227,28 @@ class MainWindow(QMainWindow):
         m.addAction(self.issue_dock.toggleViewAction())
         m.addAction(self.rules_dock.toggleViewAction())
         self.view_menu = m
+        m = self.menuBar().addMenu("設定(&S)")
+        self._action(m, "LLM の設定…", self.llm_settings_dialog)
+        self.llm_label = QLabel()
+        self.statusBar().addPermanentWidget(self.llm_label)
+        self._update_llm_label()
+
+    def _update_llm_label(self) -> None:
+        from conlang.core import llm
+        cfg = llm.load_config()
+        self.llm_label.setText(f"LLM: {cfg.model or '(未設定)'}" + (f"(考える過程 {cfg.reasoning_effort})"
+                                                                   if cfg.reasoning_effort else ""))
+        self.llm_label.setToolTip(cfg.url)
+
+    def llm_settings_dialog(self) -> None:
+        from .llm_settings import LLMSettingsDialog
+        dlg = LLMSettingsDialog(self)
+        if dlg.exec():
+            self._update_llm_label()
+            for dock in self.language_docks.values():
+                if hasattr(dock.widget(), "_update_hint"):
+                    dock.widget()._update_hint()
+            self.statusBar().showMessage(f"LLM の設定を保存した: {dlg.cfg.model}", 5000)
 
     def _set_enabled(self, on: bool) -> None:
         for w in (self.left_panel, self.stack, self.import_action, self.import_rules_action,
@@ -281,7 +303,8 @@ class MainWindow(QMainWindow):
                 grammar = (gpath.name, gpath.read_text(encoding="utf-8-sig"))
             except OSError:
                 grammar = None
-        self.rules_panel.set_rules(self.rules, self.project.language, grammar)
+        self.rules_panel.set_rules(self.rules, self.project.language, grammar,
+                                   registry.Context(self.dictionary, self.rules, self.project))
         self.refresh_issues()
         self._sync_language_panels()
 
@@ -409,6 +432,12 @@ class MainWindow(QMainWindow):
         return r == QMessageBox.Discard
 
     def closeEvent(self, event) -> None:
+        busy = [d.windowTitle() for d in self.language_docks.values() if getattr(d.widget(), "running", False)]
+        if self.rules_panel.running:
+            busy.append("規則(LLM による検査)")
+        if busy and self.ask("終了", "LLM の処理が終わっていない: " + "、".join(busy) + "\n結果を捨てて終了するか?") != QMessageBox.Yes:
+            event.ignore()
+            return
         if self.stack.currentWidget() is self.editor:
             if self.ask("終了", "編集中の項目がある。破棄して終了するか?") != QMessageBox.Yes:
                 event.ignore()

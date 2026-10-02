@@ -36,6 +36,9 @@ class LanguageModule:
     check_dictionary: Callable[[Dictionary, Rules | None], list] | None = None
     # 文法文書と規則ファイルの、表の食い違い(コードでの検査)。(文法文書の本文, 規則) → 食い違いの文の一覧
     check_grammar: Callable[[str, Rules], list[str]] | None = None
+    # 文章の記述と規則ファイルの矛盾を LLM に調べさせる。(Context, 変わっていなくても調べるか) → 終了コード。
+    # 結果は print する(画面は裏のスレッドで動かし、出力を集めて表示する)
+    llm_grammar_check: Callable[[Context, bool], int | None] | None = None
     # 画面に足す欄: [(題, 部品を作る関数)]。部品は set_context(Context) を持つ QWidget。
     # PySide6 を import するので、画面を開くときだけ呼ばれる
     gui_panels: Callable[[], list[tuple[str, Callable]]] | None = None

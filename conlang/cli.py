@@ -195,13 +195,19 @@ def cmd_llm_models(a) -> int:
     from .core import llm
     cfg = llm.load_config()
     try:
-        models = llm.list_models(cfg)
+        models = llm.list_model_infos(cfg)
     except llm.LLMError as e:
         print(f"エラー: {e}", file=sys.stderr)
         return 1
-    print(f"{cfg.url} のモデル({len(models)}個):")
-    for m in models:
-        print(f"  {'*' if m == cfg.model else ' '} {m}")
+    chat = [m for m in models if m.can_chat]
+    print(f"{cfg.url} の会話に使えるモデル({len(chat)}個。* は今の設定):")
+    for m in chat:
+        print(f"  {'*' if m.id == cfg.model else ' '} {m.label()}")
+    others = [m.id for m in models if not m.can_chat]
+    if others:
+        print(f"  (埋め込み用など、会話に使えないもの: {', '.join(others)})")
+    if any(m.thinks for m in chat):
+        print("  注: 「考える過程あり」のモデルは、--reasoning-effort none にすると速く答える")
     return 0
 
 
