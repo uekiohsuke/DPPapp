@@ -26,7 +26,7 @@ def phonemes(r: Rules) -> list[str]:
 
 
 def _parse_count(s: str, phs: list[str]) -> int:
-    """s を音素に分ける方法の数(zougo.phoneme_parses と同じ数え方)"""
+    """s を音素に分ける方法の数(phonology.parse_count と同じ数え方)"""
     count = [0] * (len(s) + 1)
     count[0] = 1
     for i in range(len(s)):

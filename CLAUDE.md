@@ -23,7 +23,8 @@
 - 整合性チェック: 共通の検査は `core/validate.py`(段階は「誤り」「注意」)、言語別の検査は registry の `check_dictionary` で足す(ピュテ語は `pute/consistency.py`)。修正済みの辞書で「誤り」が0件になること(誤検出がない)を保つ
 - LLM の呼び出しは、プロンプトと答えを `core/llm_log.py` でプロジェクトの `llm_log/` に残す
 - LLM は OpenAI 互換の API を `core/llm.py` で呼ぶ。本人の環境はローカルの Ollama(http://192.168.0.178:11434/v1)。接続先とモデルは利用者の設定(%APPDATA%\conlang\llm.json、`conlang llm config`)で、リポジトリに書かない。テストは偽のサーバーで行い、本物の LLM を前提にしない
-- `conlang/languages/pute/zougo.py` は試作を取り込んだもの。試作が更新されたら、ロジックを取り込み直す(規則はモジュール全体の値なので、使う前に `apply_rules()` で入れる)
+- 造語支援は `conlang/languages/pute/coining.py`(規則ファイルから動くエンジン。結果はデータで返す)と `cli_coining.py`(表示)。試作 `prototype/pute_zougo.py` が更新されたら、その変更をエンジンに移す。規則の解釈は `lang.py`(PuteLang)に集め、整合性チェックと共有する
+- 言語別の画面部品は registry の `gui_panels` から足す(ピュテ語は `gui_coining.py`)。土台の画面に言語別のコードを書かない
 - 創作データ(`data/`、`projects/`、文法の Markdown)は git に入れない。テストには `tests/fixtures/` の架空データを使い、実データが必要なテストは `data/` にあるときだけ動かす(skipif)
 
 ## 開発

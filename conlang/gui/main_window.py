@@ -77,6 +77,7 @@ class MainWindow(QMainWindow):
         self.project: Project | None = None
         self.dictionary: Dictionary | None = None
         self.rules = None
+        self.language_docks: dict[tuple[str, str], QDockWidget] = {}
         self.dirty = False
         self.current_id = None
         self.editing_new: dict | None = None  # 新しい語を編集中のときの、まだ辞書にない項目
@@ -225,6 +226,7 @@ class MainWindow(QMainWindow):
         m = self.menuBar().addMenu("表示(&V)")
         m.addAction(self.issue_dock.toggleViewAction())
         m.addAction(self.rules_dock.toggleViewAction())
+        self.view_menu = m
 
     def _set_enabled(self, on: bool) -> None:
         for w in (self.left_panel, self.stack, self.import_action, self.import_rules_action,
@@ -281,6 +283,31 @@ class MainWindow(QMainWindow):
                 grammar = None
         self.rules_panel.set_rules(self.rules, self.project.language, grammar)
         self.refresh_issues()
+        self._sync_language_panels()
+
+    def _sync_language_panels(self) -> None:
+        """言語別の欄(ピュテ語の造語など)を、プロジェクトの言語に合わせて出す"""
+        lang = registry.get(self.project.language if self.project else None)
+        for key, dock in list(self.language_docks.items()):
+            if lang is None or key[0] != lang.id:
+                self.removeDockWidget(dock)
+                dock.deleteLater()
+                del self.language_docks[key]
+        if lang is not None and lang.gui_panels is not None:
+            for title, factory in lang.gui_panels():
+                key = (lang.id, title)
+                if key not in self.language_docks:
+                    dock = QDockWidget(f"{title}({lang.name})", self)
+                    dock.setObjectName(f"lang-{lang.id}-{title}")
+                    dock.setWidget(factory())
+                    self.addDockWidget(Qt.BottomDockWidgetArea, dock)
+                    self.tabifyDockWidget(self.issue_dock, dock)
+                    self.view_menu.addAction(dock.toggleViewAction())
+                    self.language_docks[key] = dock
+        ctx = registry.Context(self.dictionary, self.rules, self.project)
+        for dock in self.language_docks.values():
+            dock.widget().set_context(ctx)
+        self.issue_dock.raise_()
 
     def import_rules_dialog(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "規則ファイルを取り込む", "", "規則ファイル (*.yaml *.yml)")

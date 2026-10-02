@@ -40,7 +40,7 @@ FORBIDDEN = ["aa", "ee", "ii", "oo", "wowo"]
 FORBIDDEN_PROVISIONAL = ["uu"]
 LENGTH_WEIGHTS = {2: 3, 3: 3, 4: 2, 5: 1}
 GEN_FILTERS = {"not_existing_word": True, "not_readable_as_parts": True, "min_edit_distance": 2,
-               "min_vowels": 1, "max_consonant_run": 2}
+               "min_vowels": 1, "min_consonants": 1, "max_consonant_run": 2}
 
 
 def apply_rules(path=None):
@@ -379,8 +379,10 @@ def generate_words(parts, n=10, length=None, min_vowels=None, seed=None, max_tri
     そのうえで、既存語との衝突を避けるフィルタを通す"""
     import random
     rnd = random.Random(seed)
-    if min_vowels is None:
-        min_vowels = GEN_FILTERS.get("min_vowels", 0)
+    # 規則ファイルの条件は最低限。引数で緩めることはできず、厳しくするだけ
+    floor = GEN_FILTERS.get("min_vowels", 0)
+    min_vowels = floor if min_vowels is None else max(min_vowels, floor)
+    min_consonants = GEN_FILTERS.get("min_consonants", 0)
     max_run = GEN_FILTERS.get("max_consonant_run")
     units = VOWELS + CONSONANTS
     lens, weights = zip(*sorted(LENGTH_WEIGHTS.items()))
@@ -396,6 +398,8 @@ def generate_words(parts, n=10, length=None, min_vowels=None, seed=None, max_tri
         if any(bad in w for bad in FORBIDDEN + FORBIDDEN_PROVISIONAL):
             continue
         if sum(1 for u in seq if u in VOWELS) < min_vowels:
+            continue
+        if sum(1 for u in seq if u in CONSONANTS) < min_consonants:
             continue
         if max_run is not None and consonant_run(seq) > max_run:
             continue
@@ -430,7 +434,7 @@ def cmd_gen(args, parts):
     print(f"新しい基本詞の候補({len(words)}個。音素の数 {'指定なし(重み付き)' if not length else length}):")
     for w in words:
         print(f"  {w}   ({len(phoneme_parses(w)[1])}音素)")
-    print("\n注: 母音と子音を同じ確率で選び、母音が1個以上・子音の連続が2個以下のものだけを残す【仮】(pute-rules.yaml の filters)")
+    print("\n注: 母音と子音を同じ確率で選び、母音が1個以上・子音が1個以上・子音の連続が2個以下のものだけを残す(pute-rules.yaml の filters)")
 
 
 # ---------- LLM による分解 ----------

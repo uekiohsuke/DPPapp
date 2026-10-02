@@ -96,16 +96,14 @@ def test_similar_is_notice(mini_pute):
 
 
 def test_join_merges_compound_but_not_affix(mini_pute, rules):
-    ch = C.Checker(Dictionary.load(mini_pute), rules)
-    v, ph = ch.vowels, ch.phonemes
-    segs = ["kabo", "otchu"]
-    assert P.join(segs, ch.merge_flags(segs), v, ph) == "kabotchu"      # 複合語の部品はまとめる
-    segs = ["kawo", "wosa"]
-    assert P.join(segs, ch.merge_flags(segs), v, ph) == "kawosa"        # wo も同じ
-    segs = ["jeta", "av"]
-    assert P.join(segs, ch.merge_flags(segs), v, ph) == "jetaav"        # 活用語尾はまとめない
-    segs = ["sa", "asi"]
-    assert P.join(segs, ch.merge_flags(segs), v, ph) == "saasi"         # 動詞化の接頭辞もまとめない
+    lang = C.Checker(Dictionary.load(mini_pute), rules).lang
+    v, ph = lang.vowels, lang.phonemes
+    for segs, joined in ((["kabo", "otchu"], "kabotchu"),   # 複合語の部品はまとめる
+                         (["kawo", "wosa"], "kawosa"),       # wo も同じ
+                         (["jeta", "av"], "jetaav"),         # 活用語尾はまとめない
+                         (["sa", "asi"], "saasi")):          # 動詞化の接頭辞もまとめない
+        assert lang.join(segs)[0] == joined
+        assert P.join(segs, lang.merge_flags(segs), v, ph) == joined
 
 
 def test_affix_inside_etymology_part(mini_pute, rules):

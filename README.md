@@ -12,7 +12,7 @@
 | M2 | 辞書の画面 | 済み(`conlang gui`) |
 | M3 | 規則の形式を決める | YAML で決定。読み込みと利用は済み(全項目の確認は本人) |
 | M4 | 整合性チェック | 済み(`conlang check`、`conlang pute grammar-check`) |
-| M5 | 造語支援 | |
+| M5 | 造語支援 | 済み(`conlang pute analyze / shorten / long / gen …`、画面の「造語」欄) |
 | M6 | LLM 連携 | |
 | M7 | 文法文書の管理 | |
 
@@ -33,6 +33,7 @@ python -m venv .venv          # Python 3.11
 - 左: 検索と一覧。検索する場所(見出し語・訳語・内容・タグ)と一致のしかたを選べる。内容は「語義」「語源」などの見出しで絞れる。列の見出しを押すと並べ替える
 - 右: 選んだ語の閲覧。「編集」(F2 かダブルクリック)で編集に切り替え、「適用」で辞書に反映する
 - 下: 警告。「誤り」(誤記、旧用語、音素、同じ綴り など)を赤で先に、「注意」(空の項目、似た綴り)をあとに出す。ダブルクリックでその語へ移動する
+- 下の「造語(ピュテ語)」タブ: 検索、組み合わせの検査、提案、形態素分解、短縮の候補、長大語、基本詞の候補、LLM による分解。保存前の編集も使う
 - 下の「規則」タブ: 規則ファイルの「決定」以外の規則、文法文書との表の食い違い、規則ファイルの点検の結果。「ファイル → 規則ファイルを取り込む」で読み込む
 
 LLM による文章の記述の検査は、答えを候補として出すだけで、「問題なし」の保証にはしません。文法文書と規則ファイルが前回から変わっていなければ、API を呼びません(`--force` で呼ぶ)。プロンプトと答えは、プロジェクトの `llm_log\` に残ります。
@@ -78,6 +79,10 @@ conlang pute --project projects\pute gen 10 --seed 1      # 新しい基本詞�
 conlang pute --project projects\pute find 力
 conlang pute --project projects\pute check 節点 外
 conlang pute --project projects\pute suggest 辺 数
+conlang pute --project projects\pute analyze thaidra kethjadrwoqakushavo   # 形態素分解('~' は母音をまとめた境目)
+conlang pute --project projects\pute shorten eshkiki judra   # 短縮形を使った候補
+conlang pute --project projects\pute long                    # 長大語(20文字以上)と短縮案
+conlang pute --project projects\pute decompose 重力加速度    # LLM で概念を要素に分け、未収録の要素に基本詞の候補
 conlang pute --project projects\pute decompose 重力加速度 --prompt-only
 ```
 

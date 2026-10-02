@@ -7,9 +7,8 @@ from conlang.core import llm, llm_log
 from conlang.core.registry import Context, LanguageModule, register
 from conlang.core.rules import Rules, RulesError
 
-from . import consistency, grammar_check
+from . import cli_coining, consistency, grammar_check
 from . import rules as pute_rules
-from . import zougo
 
 GRAMMAR_CHECK = "grammar-check"
 USAGE_GRAMMAR = """\
@@ -112,23 +111,38 @@ def _grammar_check(argv: list[str], ctx: Context) -> int:
     return 1 if diffs or cands else 0
 
 
+USAGE = """\
+conlang pute [--project DIR | --dict FILE] [--rules FILE] コマンド ...
+  造語支援: find / check / suggest / analyze / shorten / long / gen / parts / decompose(conlang pute --help-coining)
+  inflect [noun|verb|adjective|adverb] [語幹]   規則ファイルから活用表を作る
+  grammar-check ...                            文法 md と規則ファイルの食い違いを調べる(grammar-check --help)
+"""
+
+
 def _cli(argv: list[str], ctx: Context) -> int:
     r = ctx.rules
-    zougo.apply_rules(r.data if r else None)
     try:
-        if argv and argv[0] == "inflect":
+        if not argv or argv[0] in ("-h", "--help"):
+            print(USAGE)
+            return 0
+        if argv[0] == "--help-coining":
+            print(cli_coining.__doc__)
+            return 0
+        if argv[0] == "inflect":
             return _inflect(argv[1:], r)
-        if argv and argv[0] == GRAMMAR_CHECK:
+        if argv[0] == GRAMMAR_CHECK:
             return _grammar_check(argv[1:], ctx)
+        return cli_coining.main(argv, ctx)
     except RulesError as e:
         print(f"エラー: {e}")
         return 1
-    if ctx.dictionary is None:
-        print("辞書を --project DIR か --dict FILE で指定する")
-        return 2
-    zougo.main(argv, zougo.parts_from_words(ctx.dictionary.words))
-    return 0
+
+
+def _gui_panels():
+    from . import gui_coining
+    return [("造語", gui_coining.make_panel)]
 
 
 register(LanguageModule(id="pute", name="ピュテ語", cli=_cli, check_rules=pute_rules.check_rules,
-                        check_dictionary=consistency.check_dictionary, check_grammar=grammar_check.check_tables))
+                        check_dictionary=consistency.check_dictionary, check_grammar=grammar_check.check_tables,
+                        gui_panels=_gui_panels))

@@ -190,6 +190,32 @@ def test_issues_use_rules(win, project):
     assert any("[誤り][旧用語]" in t for t in texts)
 
 
+def test_coining_panel(win, project):
+    """ピュテ語のプロジェクトでは、造語の欄が出て、編集中の辞書で動く"""
+    from conftest import FIXTURES
+    dock = win.language_docks[("pute", "造語")]
+    panel = dock.widget()
+    panel.action.setCurrentIndex(3)  # 形態素分解
+    panel.input.setText("kabotchu")
+    assert "1. kabo + tchu" in panel.run()
+    panel.action.setCurrentIndex(1)  # 組み合わせの検査
+    panel.input.setText("節点 外")
+    assert "すでに辞書にある語" in panel.run()
+    # 規則を取り込むと、規則に従って動く(動詞化の sa が部品になる)
+    win.answers = [QMessageBox.Yes]
+    win.import_rules(FIXTURES / "mini_rules.yaml")
+    panel.input.setText("kabo sa tchu")
+    assert "kabosatchu" in panel.run()
+    # 未保存の編集も使う
+    win.new_word()
+    win.editor.form.setText("vosa")
+    win.editor.translations.add_row("", "新語")
+    win.editor.apply_button.click()
+    panel.action.setCurrentIndex(0)
+    panel.input.setText("新語")
+    assert "vosa" in panel.run()
+
+
 def test_relation_link(win):
     win.select_word(5)
     win.edit_current()

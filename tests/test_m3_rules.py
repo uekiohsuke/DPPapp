@@ -8,8 +8,10 @@ from conftest import DATA, FIXTURES, REAL_PUTE
 from conlang.cli import main
 from conlang.core.project import Project
 from conlang.core.rules import Rules, RulesError
+from conlang.core.zpdic import Dictionary
 from conlang.languages.pute import rules as PR
-from conlang.languages.pute import zougo
+from conlang.languages.pute.coining import Coiner
+from conlang.languages.pute.lang import PuteLang
 
 REAL_RULES = DATA / "pute-rules.yaml"
 REAL_GRAMMAR = DATA / "pute2-grammar.md"
@@ -19,14 +21,6 @@ needs_real_rules = pytest.mark.skipif(not REAL_RULES.exists(), reason="data/pute
 @pytest.fixture
 def mini_rules():
     return FIXTURES / "mini_rules.yaml"
-
-
-@pytest.fixture(autouse=True)
-def reset_zougo_rules():
-    """zougo の規則はモジュール全体で共有なので、テストごとに初期値へ戻す"""
-    zougo.apply_rules(None)
-    yield
-    zougo.apply_rules(None)
 
 
 # ---------- 読み込み(共通) ----------
@@ -134,50 +128,36 @@ def test_check_rules_finds_problems(mini_rules):
 
 # ---------- 造語支援が規則を使う ----------
 
-def test_apply_rules_changes_and_resets(mini_rules):
+def test_lang_reads_rules(mini_rules):
     r = Rules.load(mini_rules)
     r.data["phonology"]["vowels"].append("y")
-    zougo.apply_rules(r.data)
-    assert "y" in zougo.VOWELS and "y" in zougo.PHONEMES
-    zougo.apply_rules(None)
-    assert "y" not in zougo.VOWELS
+    lang = PuteLang.from_rules(r)
+    assert "y" in lang.vowels and "y" in lang.phonemes
+    assert lang.anywhere == {"sa": "動詞化"}                    # ハイフンで区切る接辞
+    assert {"as", "bes", "wosh", "qov"} <= set(lang.suffixes)   # 活用語尾(組み合わせを含む)
+    assert "y" not in PuteLang.from_rules(None).vowels           # 規則がなければ試作の初期値
 
 
 def test_check_uses_phonotactics(mini_pute, mini_rules):
-    zougo.apply_rules(Rules.load(mini_rules).data)
-    parts = zougo.load(mini_pute)
-    res = zougo.check(["dresi", "jetavo"], parts)
-    assert not any("現れない並び" in w for w in res["warnings"])
+    c = Coiner(Dictionary.load(mini_pute), Rules.load(mini_rules))
+    res = c.check(["dresi", "jetavo"])
+    assert not any("現れない並び" in w for w in res.warnings)
     # 部品の境目で同じ母音が並ぶときは、まとめるので aa にならない
-    res = zougo.check(["jeta", "abo"], parts)
-    assert res["word"] == "jetabo" and res["notes"] == ["母音 a が連続するのでまとめた"]
+    res = c.check(["jeta", "abo"])
+    assert res.word == "jetabo" and res.notes == ["母音 a が連続するのでまとめた"]
     # 部品の中にあるときは、音韻規則の警告になる
-    res = zougo.check(["kaab", "tchu"], parts)
-    assert "語の中に現れない並び「aa」を含む(音韻規則)" in res["warnings"]
-    res = zougo.check(["kuub"], parts)
-    assert "同じ母音が並ぶ「uu」を含む" in res["warnings"]
+    res = c.check(["kaab", "tchu"])
+    assert "語の中に現れない並び「aa」を含む(音韻規則)" in res.warnings
+    res = c.check(["kuub"])
+    assert "同じ母音が並ぶ「uu」を含む【仮】" in res.warnings  # mini_rules では uu は【仮】
 
 
-def test_vowel_merge_includes_wo():
-    assert zougo.join_parts(["thai", "idra"])[0] == "thaidra"
-    word, notes = zougo.join_parts(["kawo", "wosa"])
+def test_vowel_merge_includes_wo(mini_rules):
+    lang = PuteLang.from_rules(Rules.load(mini_rules))
+    assert lang.join(["thai", "idra"])[0] == "thaidra"
+    word, notes = lang.join(["kawo", "wosa"])
     assert word == "kawosa" and notes
-
-
-def test_generate_words(mini_pute, mini_rules):
-    zougo.apply_rules(Rules.load(mini_rules).data)
-    parts = zougo.load(mini_pute)
-    a = zougo.generate_words(parts, 20, seed=3)
-    assert a == zougo.generate_words(parts, 20, seed=3)  # 同じ種なら同じ候補
-    assert len(a) == 20 and len(set(a)) == 20
-    known = {p["form"] for p in parts}
-    for w in a:
-        n, seq = zougo.phoneme_parses(w)
-        assert n == 1 and 2 <= len(seq) <= 5
-        assert w not in known
-        assert any(u in zougo.VOWELS for u in seq)
-        assert zougo.consonant_run(seq) <= 2
-        assert not any(bad in w for bad in zougo.FORBIDDEN + zougo.FORBIDDEN_PROVISIONAL)
+    assert lang.join(["sa", "asi"])[0] == "saasi"  # ハイフンで区切る接辞はまとめない
 
 
 # ---------- CLI ----------
@@ -216,16 +196,13 @@ def test_real_rules_load_clean():
 
 
 @needs_real_rules
-def test_real_rules_match_zougo_defaults():
-    """試作の初期値と規則ファイルが同じ(規則を読めないときも、同じように動く)。
+def test_real_rules_match_defaults():
+    """初期値(試作の値)と規則ファイルが同じ(規則を読めないときも、同じように動く)。
     除外する並びは、正式と【仮】の分け方が変わることがあるので、合わせた集合で比べる"""
-    def snapshot():
-        return (sorted(zougo.PHONEMES), sorted(zougo.FORBIDDEN + zougo.FORBIDDEN_PROVISIONAL),
-                zougo.LENGTH_WEIGHTS, zougo.GEN_FILTERS)
-    zougo.apply_rules(None)
-    before = snapshot()
-    zougo.apply_rules(Rules.load(REAL_RULES).data)
-    assert snapshot() == before
+    def snapshot(lang):
+        return (sorted(lang.phonemes), sorted(lang.forbidden + lang.forbidden_provisional),
+                lang.length_weights, lang.gen_filters)
+    assert snapshot(PuteLang.from_rules(Rules.load(REAL_RULES))) == snapshot(PuteLang.from_rules(None))
 
 
 def _grammar_table(text, anchor):
@@ -259,12 +236,3 @@ def test_real_inflection_matches_grammar_md():
         assert got == expected, cls
 
 
-@needs_real_rules
-@pytest.mark.skipif(not REAL_PUTE.exists(), reason="data/secondpute.json がない")
-def test_real_generated_words_avoid_dictionary():
-    zougo.apply_rules(Rules.load(REAL_RULES).data)
-    parts = zougo.load(REAL_PUTE)
-    words = zougo.generate_words(parts, 30, seed=0)
-    assert len(words) == 30
-    known = {p["form"] for p in parts}
-    assert not set(words) & known
