@@ -21,10 +21,15 @@ def _text(s: str) -> str:
     return escape(s).replace("\n", "<br>")
 
 
-def render(w: dict, d: Dictionary) -> str:
+def render(w: dict, d: Dictionary, display=None) -> str:
+    """display: 見出し語の表示を変える関数(ウリ語の現代の転写など)。変えたときは、辞書の綴りも併記する"""
     e = w["entry"]
-    out = [CSS, f"<h1>{escape(e.get('form', '')) or '<span class=empty>(見出し語なし)</span>'}</h1>",
-           f"<div class=id>id {e.get('id')}</div>"]
+    f = e.get("form", "")
+    shown = display(f) if (display and f) else f
+    out = [CSS, f"<h1>{escape(shown) or '<span class=empty>(見出し語なし)</span>'}</h1>"]
+    if shown != f:
+        out.append(f"<div class=id>辞書の綴り: {escape(f)}</div>")
+    out.append(f"<div class=id>id {e.get('id')}</div>")
     tags = w.get("tags", [])
     if tags:
         out.append("<p>" + "".join(f"<span class=tag>{escape(t)}</span>" for t in tags) + "</p>")

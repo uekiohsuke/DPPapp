@@ -506,6 +506,10 @@ LLM_RULES = """\
 - 【分野】があれば、その分野での意味として考える(同じ日本語でも、分野によって指すものが違う)
 - 【区別したい意味】に書かれた意味は、指していない。その意味の部品を選ばない
 - 下の【既存語の作り方の例】は、この辞書で実際に作られた複合語。組み立て方の参考にする
+
+クラス接頭辞(辞書で区分が「クラス」の語。例: scha = 物理)は、分野を区別するための接頭辞で、核にはならない。
+- 分野を区別したいときだけ使う。使うときは role を "クラス" にして、いちばん前に置く。核はその後ろに置く
+  (例: 重力 = scha-bosh-tschothke は、クラス scha のあとに、核 bosh(力)が来る)
 """
 
 LLM_SCHEMA = """\
@@ -516,7 +520,7 @@ LLM_SCHEMA = """\
   "interpretation": "この概念をどういう意味だと解釈したか(1〜2文)。同じ日本語の別の意味と取り違えていないか、本人が確かめるため",
   "elements": [
     {
-      "role": "核" または "修飾",
+      "role": "クラス"、"核"、"修飾" のどれか,
       "meaning": "この要素の意味(日本語)",
       "existing": "辞書の見出し語または短縮形をそのまま書く。既存語で表せないときは null",
       "reason": "なぜこの語を選んだか、または既存語で表せない理由(1文)"
@@ -526,7 +530,7 @@ LLM_SCHEMA = """\
 }
 
 守ること:
-- elements は、大本の概念(核)を先頭にして、後ろへ伸ばす順に並べる。核は1つ
+- elements は、大本の概念(核)を先頭にして、後ろへ伸ばす順に並べる。核は1つ(クラス接頭辞を使うときは、その前に置く)
 - elements の数は最小にする。細かく分けすぎない
 - existing には、下の辞書にある語だけを書く。辞書にない語を書いてはいけない
 """
@@ -601,8 +605,17 @@ def build_decompose_prompt(c: Coiner, req: ConceptRequest | str, memo: str = "")
     return "\n".join(out)
 
 
+CLASS = "クラス"  # 辞書の訳語の区分。分野を区別するクラス接頭辞(scha など)
+
+
+def is_class_prefix(p: Part | None) -> bool:
+    return p is not None and CLASS in p.kinds
+
+
 def ground(c: Coiner, data: dict) -> list[Element]:
-    """LLM の答えを辞書と照らし合わせる。辞書にない語を既存と主張していたら、未収録に直す(仕様書 4.4)"""
+    """LLM の答えを辞書と照らし合わせる(仕様書 4.4)
+    - 辞書にない語を既存と主張していたら、未収録に直す
+    - クラス接頭辞は核にならないので、核とされていたら「クラス」に直し、いちばん前に置く"""
     els = []
     for e in data.get("elements", []) or []:
         if not isinstance(e, dict):
@@ -615,5 +628,13 @@ def ground(c: Coiner, data: dict) -> list[Element]:
         el = Element(str(e.get("role", "")), str(e.get("meaning", "")), str(e.get("reason", "")), ex, p)
         if ex and p is None:
             el.fixed = f"LLM が既存語として挙げた {ex} は辞書にないので、未収録として扱う"
+        if is_class_prefix(p) and el.role != CLASS:
+            el.fixed = f"{p.form} はクラス接頭辞で、核や修飾ではないので「クラス」として扱う"
+            el.role = CLASS
         els.append(el)
+    classes = [e for e in els if e.role == CLASS]
+    if classes and els[:len(classes)] != classes:
+        for e in classes:
+            e.fixed = (e.fixed + "。" if e.fixed else "") + "クラス接頭辞なので、いちばん前に置いた"
+        els = classes + [e for e in els if e.role != CLASS]
     return els

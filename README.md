@@ -1,7 +1,8 @@
 # conlang — 人工言語創作アプリ
 
 自分の人工言語の文法・辞書・造語を1か所で整理して育てるための、自分専用のデスクトップアプリです(PySide6)。
-最初に対応する言語はピュテ語です。仕様は [conlang-app-spec.md](conlang-app-spec.md) にあります。
+言語別の機能は、ピュテ語(造語支援・整合性チェック・活用表など)と、ウリ語(基本の部分: 現代の転写、音節、辞書の検査)があります。
+仕様は [conlang-app-spec.md](conlang-app-spec.md) にあります。
 
 ## 進み具合(仕様書 §7)
 
@@ -30,7 +31,9 @@ python -m venv .venv          # Python 3.11
 .venv\Scripts\conlang gui projects\pute    # フォルダを省くと、前に開いたプロジェクトを開く
 ```
 
-- 左: 検索と一覧。検索する場所(見出し語・訳語・内容・タグ)と一致のしかたを選べる。内容は「語義」「語源」などの見出しで絞れる。列の見出しを押すと並べ替える
+- 上の「プロジェクト」: 開いたことのあるプロジェクト(言語)を切り替える。言語別の欄も、その言語のものに替わる
+- 「辞書」タブと「文法」タブ: 文法タブでは、プロジェクトの grammar\ の Markdown を読める(目次から移動、検索、状態タグの色分けと数、規則の目印の表示)。「エディタで開く」で直すと、自動で読み直す
+- 左: 検索と一覧。言語に表示の切り替えがあれば(ウリ語の「現代の転写」)、見出し語の表示を切り替えられる(辞書の綴りは変えない)。検索する場所(見出し語・訳語・内容・タグ)と一致のしかたを選べる。内容は「語義」「語源」などの見出しで絞れる。列の見出しを押すと並べ替える
 - 右: 選んだ語の閲覧。「編集」(F2 かダブルクリック)で編集に切り替え、「適用」で辞書に反映する
 - 下: 警告。「誤り」(誤記、旧用語、音素、同じ綴り など)を赤で先に、「注意」(空の項目、似た綴り)をあとに出す。ダブルクリックでその語へ移動する
 - 「設定 → LLM の設定」: 接続先、モデル(「モデルの一覧を取得」で接続先のモデルから選ぶ。Ollama なら大きさと「考える過程あり」も出る)、考える過程の量、温度、待ち時間。「接続を試す」で確かめられる。右下に今のモデルが出る
@@ -94,6 +97,20 @@ conlang pute --project projects\pute decompose 重力加速度 --prompt-only
 文法 md と規則ファイルは、節の番号ではなく、md の `<!-- rule: ID -->` と規則ファイルの `ref` で対応づけます。章立てや節の番号を変えても、照合は壊れません。
 
 LLM の接続先とモデルは `%APPDATA%\conlang\llm.json` に保存します(リポジトリには入りません)。環境変数 `CONLANG_LLM_URL` / `CONLANG_LLM_MODEL` / `CONLANG_LLM_KEY` があれば、そちらが優先です。
+
+ウリ語(`--language uri` のプロジェクト):
+
+```powershell
+conlang new projects\uri --name ウリ語 --language uri
+conlang import projects\uri data\uri.json
+conlang grammar import projects\uri data\uri-grammar.md
+conlang rules import projects\uri data\uri-rules.yaml      # 文法 md から写した下書き(status はすべて「仮」)
+conlang uri --project projects\uri modern SuKaHuDu FoTONe  # 辞書の旧表記 → 現代の転写(sukahudu、fotoone)
+conlang uri --project projects\uri syllables KanTi ReWing  # 音節(CV、CVn、CVng)
+conlang uri --project projects\uri analyze LoRoPu          # 接頭辞(lo-)と残り(ropu)を、辞書と照らす
+conlang uri --project projects\uri find 女装
+conlang check projects\uri                                 # 音節に分けられない語(近現代の形など)、旧表記の大文字の位置
+```
 
 辞書は、元のファイルの書式(Python 風の字下げ / zpdic の書き出し形式、改行コード、末尾の改行)に合わせて書き戻すので、
 内容を変えていなければ保存してもバイト列が変わりません。

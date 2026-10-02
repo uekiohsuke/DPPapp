@@ -181,6 +181,27 @@ ANSWER = {"concept": "外の道", "elements": [
 ]}
 
 
+def test_ground_class_prefix_is_not_core(mini_pute, rules):
+    """クラス接頭辞は分野を区別するための接頭辞で、核にはならない。核とされたら「クラス」に直し、前に置く"""
+    d = Dictionary.load(mini_pute)
+    w = add(d, "scha", "物理")
+    w["translations"][0]["title"] = "クラス"
+    c = Coiner(d, rules)
+    answer = {"elements": [
+        {"role": "核", "meaning": "道", "existing": "dresi"},
+        {"role": "核", "meaning": "物理", "existing": "scha"},
+    ]}
+    els = ground(c, answer)
+    assert [(e.role, e.form) for e in els] == [("クラス", "scha"), ("核", "dresi")]
+    assert "クラス接頭辞" in els[0].fixed and "いちばん前に置いた" in els[0].fixed
+    ok = ground(c, {"elements": [{"role": "クラス", "existing": "scha"}, {"role": "核", "existing": "dresi"}]})
+    assert ok[0].fixed == ""  # 正しく使われていれば直さない
+    from conlang.languages.pute.coining import build_decompose_prompt
+    p = build_decompose_prompt(c, "物理の道")
+    assert "クラス接頭辞(辞書で区分が「クラス」の語" in p and "核にはならない" in p
+    assert "scha | 物理 | 区分: クラス" in p
+
+
 def test_ground(c):
     els = ground(c, ANSWER)
     assert [e.form for e in els] == ["dresi", None, None]

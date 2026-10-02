@@ -1,0 +1,122 @@
+{
+  "words" : [ {
+    "entry" : {
+      "id" : 1,
+      "form" : "KoRuMa"
+    },
+    "translations" : [ {
+      "title" : "名詞",
+      "forms" : [ "架空の石" ]
+    } ],
+    "tags" : [ "基本" ],
+    "contents" : [ ],
+    "variations" : [ ],
+    "relations" : [ ]
+  }, {
+    "entry" : {
+      "id" : 2,
+      "form" : "SuKoRuMa"
+    },
+    "translations" : [ {
+      "title" : "動詞",
+      "forms" : [ "架空の石にする" ]
+    } ],
+    "tags" : [ ],
+    "contents" : [ ],
+    "variations" : [ ],
+    "relations" : [ ]
+  }, {
+    "entry" : {
+      "id" : 3,
+      "form" : "ToKOPan"
+    },
+    "translations" : [ {
+      "title" : "名詞",
+      "forms" : [ "長い架空の道" ]
+    } ],
+    "tags" : [ ],
+    "contents" : [ ],
+    "variations" : [ ],
+    "relations" : [ ]
+  }, {
+    "entry" : {
+      "id" : 4,
+      "form" : "ReWing"
+    },
+    "translations" : [ {
+      "title" : "名詞",
+      "forms" : [ "架空の鳥" ]
+    } ],
+    "tags" : [ ],
+    "contents" : [ ],
+    "variations" : [ ],
+    "relations" : [ ]
+  }, {
+    "entry" : {
+      "id" : 5,
+      "form" : "Noe"
+    },
+    "translations" : [ {
+      "title" : "接続詞",
+      "forms" : [ "架空の古い接続" ]
+    } ],
+    "tags" : [ "近現代" ],
+    "contents" : [ ],
+    "variations" : [ ],
+    "relations" : [ ]
+  }, {
+    "entry" : {
+      "id" : 6,
+      "form" : "XQ"
+    },
+    "translations" : [ {
+      "title" : "名詞",
+      "forms" : [ "架空の略称" ]
+    } ],
+    "tags" : [ "略称" ],
+    "contents" : [ ],
+    "variations" : [ ],
+    "relations" : [ ]
+  }, {
+    "entry" : {
+      "id" : 7,
+      "form" : "UliPa"
+    },
+    "translations" : [ {
+      "title" : "名詞",
+      "forms" : [ "架空の国の人" ]
+    } ],
+    "tags" : [ ],
+    "contents" : [ ],
+    "variations" : [ ],
+    "relations" : [ ]
+  }, {
+    "entry" : {
+      "id" : 8,
+      "form" : "KoruMa"
+    },
+    "translations" : [ {
+      "title" : "名詞",
+      "forms" : [ "大文字の書き漏らし" ]
+    } ],
+    "tags" : [ ],
+    "contents" : [ ],
+    "variations" : [ ],
+    "relations" : [ ]
+  } ],
+  "zpdic" : {
+    "punctuations" : [ "、" ],
+    "defaultWord" : {
+      "entry" : {
+        "id" : -1,
+        "form" : ""
+      },
+      "translations" : [ ],
+      "tags" : [ ],
+      "contents" : [ ],
+      "variations" : [ ],
+      "relations" : [ ]
+    }
+  },
+  "snoj" : null
+}

@@ -12,7 +12,7 @@ from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QDockWidget, QFileDialog, QHBoxLayout, QHeaderView, QInputDialog,
     QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QSplitter,
-    QStackedWidget, QTableView, QTextBrowser, QVBoxLayout, QWidget,
+    QStackedWidget, QTableView, QTabWidget, QTextBrowser, QToolBar, QVBoxLayout, QWidget,
 )
 
 from conlang.core import registry
@@ -25,6 +25,7 @@ from conlang.core.wordedit import apply_fields, separator, to_fields
 from conlang.core.zpdic import Dictionary, ZpdicError, form, meanings
 
 from . import word_view
+from .grammar_view import GrammarView
 from .rules_panel import RulesPanel
 from .word_editor import WordEditor
 
@@ -37,6 +38,7 @@ class WordTableModel(QAbstractTableModel):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.words: list[dict] = []
+        self.display = None  # 見出し語の表示を変える関数(なければ辞書の綴りのまま)
 
     def set_words(self, words: list[dict]) -> None:
         self.beginResetModel()
@@ -60,7 +62,10 @@ class WordTableModel(QAbstractTableModel):
         w = self.words[index.row()]
         col = index.column()
         if role == Qt.DisplayRole:
-            return (form(w), "、".join(meanings(w)), "、".join(w.get("tags", [])), w["entry"].get("id"))[col]
+            f = self.display(form(w)) if self.display else form(w)
+            return (f, "、".join(meanings(w)), "、".join(w.get("tags", [])), w["entry"].get("id"))[col]
+        if role == Qt.ToolTipRole and col == 0 and self.display:
+            return f"辞書の綴り: {form(w)}"
         if role == Qt.UserRole:
             return w["entry"].get("id")
         return None
@@ -133,9 +138,14 @@ class MainWindow(QMainWindow):
 
         left = QWidget()
         ll = QVBoxLayout(left)
+        self.display_box = QComboBox()
+        self.display_box.setToolTip("見出し語の表示(辞書の綴りは変えない)")
+        self.display_box.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+        self.display_box.currentIndexChanged.connect(self._display_changed)
         row = QHBoxLayout()
         row.addWidget(self.search_box)
         row.addWidget(self.mode_box)
+        row.addWidget(self.display_box)
         ll.addLayout(row)
         ll.addLayout(targets)
         ll.addWidget(self.table)
@@ -173,7 +183,25 @@ class MainWindow(QMainWindow):
         splitter.addWidget(self.stack)
         splitter.setStretchFactor(0, 2)
         splitter.setStretchFactor(1, 3)
-        self.setCentralWidget(splitter)
+
+        # 辞書と文法を、タブで切り替える
+        self.grammar_view = GrammarView()
+        self.views = QTabWidget()
+        self.views.addTab(splitter, "辞書")
+        self.views.addTab(self.grammar_view, "文法")
+        self.setCentralWidget(self.views)
+
+        # プロジェクト(言語)の切り替え
+        bar = QToolBar("プロジェクト", self)
+        bar.setObjectName("projects")
+        bar.setMovable(False)
+        bar.addWidget(QLabel(" プロジェクト: "))
+        self.project_box = QComboBox()
+        self.project_box.setMinimumWidth(320)
+        self.project_box.activated.connect(self._project_chosen)
+        bar.addWidget(self.project_box)
+        self.addToolBar(bar)
+        self._reload_project_box()
 
         # 警告
         self.issue_list = QListWidget()
@@ -213,6 +241,7 @@ class MainWindow(QMainWindow):
         m.addSeparator()
         self.import_action = self._action(m, "zpdic 辞書を取り込む…", self.import_dialog)
         self.import_rules_action = self._action(m, "規則ファイルを取り込む…", self.import_rules_dialog)
+        self.import_grammar_action = self._action(m, "文法文書を取り込む…", self.import_grammar_dialog)
         self.save_action = self._action(m, "保存", self.save, QKeySequence.Save)
         self.export_action = self._action(m, "zpdic 形式で書き出す…", self.export_dialog)
         m.addSeparator()
@@ -251,7 +280,7 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"LLM の設定を保存した: {dlg.cfg.model}", 5000)
 
     def _set_enabled(self, on: bool) -> None:
-        for w in (self.left_panel, self.stack, self.import_action, self.import_rules_action,
+        for w in (self.left_panel, self.stack, self.import_action, self.import_rules_action, self.import_grammar_action,
                   self.save_action, self.export_action,
                   self.new_word_action, self.edit_action, self.delete_action):
             w.setEnabled(on)
@@ -280,6 +309,8 @@ class MainWindow(QMainWindow):
             return False
         self.project, self.dictionary = project, d
         self.settings.setValue("last_project", str(project.root))
+        self._remember_project(project)
+        self.current_id = None
         self._set_dirty(False)
         self._set_enabled(True)
         self._end_edit()
@@ -288,6 +319,47 @@ class MainWindow(QMainWindow):
         self.reload_rules()
         self.statusBar().showMessage(f"開いた: {project.root}({len(d)}項目)", 5000)
         return True
+
+    # --- 最近のプロジェクト(言語の切り替え) ---
+
+    RECENT_KEY = "recent_projects"
+    RECENT_MAX = 12
+
+    def recent_projects(self) -> list[str]:
+        v = self.settings.value(self.RECENT_KEY, []) or []
+        items = [v] if isinstance(v, str) else list(v)
+        return [p for p in items if (Path(p) / "project.json").exists()]
+
+    def _remember_project(self, project: Project) -> None:
+        root = str(project.root.resolve())
+        items = [root] + [p for p in self.recent_projects() if str(Path(p).resolve()) != root]
+        self.settings.setValue(self.RECENT_KEY, items[:self.RECENT_MAX])
+        self._reload_project_box()
+
+    def _reload_project_box(self) -> None:
+        self.project_box.blockSignals(True)
+        self.project_box.clear()
+        current = str(self.project.root.resolve()) if self.project else None
+        for p in self.recent_projects():
+            try:
+                meta = Project.open(p).meta
+            except (ProjectError, OSError, ValueError):
+                continue
+            lang = registry.get(meta.get("language"))
+            label = f"{meta.get('name', '')}  —  {p}" + (f"  [{lang.name}の機能]" if lang else "")
+            self.project_box.addItem(label, p)
+        self.project_box.addItem("ほかのプロジェクトを開く…", None)
+        i = self.project_box.findData(current) if current else -1
+        self.project_box.setCurrentIndex(i if i >= 0 else self.project_box.count() - 1)
+        self.project_box.blockSignals(False)
+
+    def _project_chosen(self, index: int) -> None:
+        path = self.project_box.itemData(index)
+        if path is None:
+            self.open_project_dialog()
+        elif not self.project or str(self.project.root.resolve()) != path:
+            self.open_project(path)
+        self._reload_project_box()  # 開けなかったときや取り消したときは、選択を元に戻す
 
     def reload_rules(self) -> None:
         """規則と文法文書を読み直し、規則の欄と警告を出し直す"""
@@ -307,12 +379,53 @@ class MainWindow(QMainWindow):
                                    registry.Context(self.dictionary, self.rules, self.project))
         self.refresh_issues()
         self._sync_language_panels()
+        self._sync_display_box()
+        self.reload_grammar_view(gpath)
+
+    def reload_grammar_view(self, preferred: Path | None = None) -> None:
+        g = self.project.grammar_dir
+        docs = sorted(g.glob("*.md")) if g.is_dir() else []
+        self.grammar_view.set_documents(docs, preferred)
+        self.views.setTabText(1, f"文法({len(docs)})" if docs else "文法")
+
+    DICT_FORM = "辞書の綴り"
+
+    def _sync_display_box(self) -> None:
+        """言語に表示の切り替え(ウリ語の現代の転写など)があれば、選べるようにする"""
+        lang = registry.get(self.project.language if self.project else None)
+        names = list((lang.transcriptions or {}).keys()) if lang else []
+        current = self.display_box.currentText()
+        self.display_box.blockSignals(True)
+        self.display_box.clear()
+        self.display_box.addItem(self.DICT_FORM)
+        self.display_box.addItems(names)
+        i = self.display_box.findText(current)
+        self.display_box.setCurrentIndex(max(i, 0))
+        self.display_box.blockSignals(False)
+        self.display_box.setVisible(bool(names))
+        self._display_changed()
+
+    def display_function(self):
+        lang = registry.get(self.project.language if self.project else None)
+        name = self.display_box.currentText()
+        if not lang or not lang.transcriptions or name not in lang.transcriptions:
+            return None
+        return lang.transcriptions[name](self.rules)
+
+    def _display_changed(self, *_) -> None:
+        self.model.beginResetModel()
+        self.model.display = self.display_function()
+        self.model.endResetModel()
+        if self.current_id is not None:
+            self.select_word(self.current_id)
 
     def _sync_language_panels(self) -> None:
         """言語別の欄(ピュテ語の造語など)を、プロジェクトの言語に合わせて出す"""
         lang = registry.get(self.project.language if self.project else None)
         for key, dock in list(self.language_docks.items()):
             if lang is None or key[0] != lang.id:
+                if getattr(dock.widget(), "running", False):
+                    dock.widget().cancel()  # 裏の処理の結果は捨てる
                 self.removeDockWidget(dock)
                 dock.deleteLater()
                 del self.language_docks[key]
@@ -331,6 +444,22 @@ class MainWindow(QMainWindow):
         for dock in self.language_docks.values():
             dock.widget().set_context(ctx)
         self.issue_dock.raise_()
+
+    def import_grammar_dialog(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "文法文書を取り込む", "", "Markdown (*.md)")
+        if path:
+            self.import_grammar(path)
+
+    def import_grammar(self, path: str | Path) -> bool:
+        try:
+            bak = self.project.import_grammar(path)
+        except (ProjectError, OSError) as e:
+            self.error(f"取り込めなかった:\n{e}")
+            return False
+        self.reload_rules()
+        self.views.setCurrentWidget(self.grammar_view)
+        self.statusBar().showMessage("文法文書を取り込んだ" + (f"。前の文書のバックアップ: {bak}" if bak else ""), 8000)
+        return True
 
     def import_rules_dialog(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "規則ファイルを取り込む", "", "規則ファイル (*.yaml *.yml)")
@@ -511,7 +640,8 @@ class MainWindow(QMainWindow):
     def _show(self, word_id) -> None:
         self.current_id = word_id
         w = self.dictionary.get(word_id) if (self.dictionary and word_id is not None) else None
-        self.viewer.setHtml(word_view.render(w, self.dictionary) if w else "<p style='color:#999'>項目を選ぶ</p>")
+        self.viewer.setHtml(word_view.render(w, self.dictionary, self.model.display) if w
+                            else "<p style='color:#999'>項目を選ぶ</p>")
         self.edit_button.setEnabled(w is not None)
         self.delete_button.setEnabled(w is not None)
 

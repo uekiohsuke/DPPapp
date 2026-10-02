@@ -123,7 +123,8 @@ def check_terminology(d: Dictionary, rules: Rules | None) -> list[Issue]:
 
 def check_all(d: Dictionary, rules: Rules | None = None, language=None) -> list[Issue]:
     """共通の検査と、言語別の検査(language は registry.LanguageModule)をまとめて行う"""
-    out = check_dictionary(d) + check_similar(d) + check_terminology(d, rules)
+    min_length = getattr(language, "similar_min_length", 4) if language is not None else 4
+    out = check_dictionary(d) + check_similar(d, min_length=min_length) + check_terminology(d, rules)
     if language is not None and language.check_dictionary is not None:
         out += language.check_dictionary(d, rules)
     return out
