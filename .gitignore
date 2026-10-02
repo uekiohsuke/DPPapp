@@ -1,0 +1,24 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# 創作データ(辞書・文法)はリポジトリに入れない
+/data/
+/projects/
+backup/
+llm_log/
+pute2-grammar.md
+uri-grammar.md
+uri-go-grammar.md
+
+# GitHub から空のまま clone したフォルダ(不要)
+/DPPapp/
+
+# エディタ
+.vscode/
+.idea/

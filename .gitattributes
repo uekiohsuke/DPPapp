@@ -1,0 +1,2 @@
+# 辞書の往復テストはバイト列で比べるので、fixture の改行コードを git に変えさせない
+tests/fixtures/** -text
