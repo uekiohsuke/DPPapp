@@ -20,7 +20,7 @@ from conlang.core import search as S
 from conlang.core.backup import backup_file
 from conlang.core.project import Project, ProjectError
 from conlang.core.rules import RulesError
-from conlang.core.validate import check_dictionary
+from conlang.core.validate import ERROR, check_all
 from conlang.core.wordedit import apply_fields, separator, to_fields
 from conlang.core.zpdic import Dictionary, ZpdicError, form, meanings
 
@@ -76,6 +76,7 @@ class MainWindow(QMainWindow):
         self.settings = settings or QSettings("conlang", "conlang")
         self.project: Project | None = None
         self.dictionary: Dictionary | None = None
+        self.rules = None
         self.dirty = False
         self.current_id = None
         self.editing_new: dict | None = None  # 新しい語を編集中のときの、まだ辞書にない項目
@@ -260,18 +261,26 @@ class MainWindow(QMainWindow):
         self._end_edit()
         self._reload_content_titles()
         self.refresh_list()
-        self.refresh_issues()
         self.reload_rules()
         self.statusBar().showMessage(f"開いた: {project.root}({len(d)}項目)", 5000)
         return True
 
     def reload_rules(self) -> None:
+        """規則と文法文書を読み直し、規則の欄と警告を出し直す"""
         try:
-            rules = self.project.load_rules()
+            self.rules = self.project.load_rules()
         except (RulesError, OSError) as e:
-            rules = None
+            self.rules = None
             self.error(f"規則ファイルを読めなかった:\n{e}")
-        self.rules_panel.set_rules(rules, self.project.language)
+        grammar = None
+        gpath = self.project.grammar_path(self.rules)
+        if gpath is not None:
+            try:
+                grammar = (gpath.name, gpath.read_text(encoding="utf-8-sig"))
+            except OSError:
+                grammar = None
+        self.rules_panel.set_rules(self.rules, self.project.language, grammar)
+        self.refresh_issues()
 
     def import_rules_dialog(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "規則ファイルを取り込む", "", "規則ファイル (*.yaml *.yml)")
@@ -534,15 +543,20 @@ class MainWindow(QMainWindow):
     # ---------- 警告 ----------
 
     def refresh_issues(self):
+        """辞書の警告と整合性チェック(共通と言語別)。誤りを先に出す"""
         self.issue_list.clear()
         if not self.dictionary:
             return []
-        issues = check_dictionary(self.dictionary)
+        issues = check_all(self.dictionary, self.rules, registry.get(self.project.language if self.project else None))
+        issues.sort(key=lambda i: i.level != ERROR)
         for i in issues:
-            item = QListWidgetItem(f"[{i.kind}] {i.message}")
+            item = QListWidgetItem(f"[{i.level}][{i.kind}] {i.message}")
             item.setData(Qt.UserRole, i.word_id)
+            if i.level == ERROR:
+                item.setForeground(Qt.red)
             self.issue_list.addItem(item)
-        self.issue_dock.setWindowTitle(f"警告({len(issues)}件)")
+        errors = sum(1 for i in issues if i.level == ERROR)
+        self.issue_dock.setWindowTitle(f"警告(誤り {errors}件・注意 {len(issues) - errors}件)")
         return issues
 
     def _on_issue(self, item: QListWidgetItem) -> None:

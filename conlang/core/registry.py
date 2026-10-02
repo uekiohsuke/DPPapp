@@ -7,20 +7,35 @@ from __future__ import annotations
 
 import importlib
 from dataclasses import dataclass
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from .rules import Rules
 from .zpdic import Dictionary
+
+if TYPE_CHECKING:
+    from .project import Project
+
+
+@dataclass
+class Context:
+    """言語別機能に渡すもの。指定されなかったものは None"""
+    dictionary: Dictionary | None = None
+    rules: Rules | None = None
+    project: "Project | None" = None
 
 
 @dataclass(frozen=True)
 class LanguageModule:
     id: str
     name: str
-    # CLI のサブコマンド: (引数, 辞書, 規則[なければ None]) を受け取る
-    cli: Callable[[list[str], Dictionary, Rules | None], None] | None = None
+    # CLI のサブコマンド: (引数, Context)
+    cli: Callable[[list[str], Context], int | None] | None = None
     # 規則ファイルそのものの点検。問題を文の一覧で返す
     check_rules: Callable[[Rules], list[str]] | None = None
+    # 辞書の言語別の整合性チェック。validate.Issue の一覧を返す
+    check_dictionary: Callable[[Dictionary, Rules | None], list] | None = None
+    # 文法文書と規則ファイルの、表の食い違い(コードでの検査)。(文法文書の本文, 規則) → 食い違いの文の一覧
+    check_grammar: Callable[[str, Rules], list[str]] | None = None
 
 
 _modules: dict[str, LanguageModule] = {}
@@ -38,8 +53,8 @@ def load_builtin() -> None:
         importlib.import_module(name)
 
 
-def get(lang_id: str) -> LanguageModule | None:
-    return _modules.get(lang_id)
+def get(lang_id: str | None) -> LanguageModule | None:
+    return _modules.get(lang_id) if lang_id else None
 
 
 def all_modules() -> list[LanguageModule]:

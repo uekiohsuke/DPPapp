@@ -105,6 +105,35 @@ class Project:
         """規則ファイルがなければ None"""
         return Rules.load(self.rules_path) if self.rules_path.exists() else None
 
+    # --- 文法文書 ---
+
+    @property
+    def grammar_dir(self) -> Path:
+        return self.root / "grammar"
+
+    @property
+    def llm_log_dir(self) -> Path:
+        return self.root / "llm_log"
+
+    def grammar_path(self, rules: Rules | None = None) -> Path | None:
+        """文法文書の場所。規則ファイルの grammar_doc の名前を grammar/ で探し、なければ grammar/ の唯一の .md"""
+        name = rules.get("grammar_doc") if rules else None
+        if name and (self.grammar_dir / str(name)).exists():
+            return self.grammar_dir / str(name)
+        mds = sorted(self.grammar_dir.glob("*.md")) if self.grammar_dir.is_dir() else []
+        return mds[0] if len(mds) == 1 else None
+
+    def import_grammar(self, source: str | Path) -> Path | None:
+        """文法文書を grammar/ にコピーする(同じ名前があればバックアップしてから)。戻り値はバックアップのパス"""
+        source = Path(source)
+        dest = self.grammar_dir / source.name
+        if dest.exists() and source.resolve() == dest.resolve():
+            raise ProjectError("取り込み元とプロジェクトの文法文書が同じファイル")
+        self.grammar_dir.mkdir(exist_ok=True)
+        bak = backup_file(dest, self.backup_dir)
+        shutil.copyfile(source, dest)
+        return bak
+
     # --- 辞書 ---
 
     def import_dictionary(self, source: str | Path) -> Path | None:

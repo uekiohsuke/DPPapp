@@ -13,6 +13,7 @@ class RulesPanel(QWidget):
         super().__init__(parent)
         self.rules: Rules | None = None
         self.language: str | None = None
+        self.grammar: tuple[str, str] | None = None
         self.summary = QLabel()
         self.summary.setWordWrap(True)
         self.only_unsettled = QCheckBox("「決定」以外だけ")
@@ -27,9 +28,19 @@ class RulesPanel(QWidget):
         lay.addWidget(self.only_unsettled)
         lay.addWidget(self.tree)
 
-    def set_rules(self, rules: Rules | None, language: str | None) -> None:
-        self.rules, self.language = rules, language
+    def set_rules(self, rules: Rules | None, language: str | None, grammar: tuple[str, str] | None = None) -> None:
+        """grammar: (文法文書の名前, 本文)。あれば、表の食い違いをコードで照合して出す"""
+        self.rules, self.language, self.grammar = rules, language, grammar
         self.refresh()
+
+    def _add_problems(self, title: str, problems: list[str]) -> None:
+        root = QTreeWidgetItem([title, "", ""])
+        for msg in problems:
+            child = QTreeWidgetItem([msg, "", ""])
+            child.setToolTip(0, msg)
+            root.addChild(child)
+        self.tree.insertTopLevelItem(0, root)
+        root.setExpanded(True)
 
     def refresh(self) -> None:
         self.tree.clear()
@@ -48,15 +59,20 @@ class RulesPanel(QWidget):
         lines = [f"{self.rules.language or '言語名なし'}: 規則 {len(all_items)}件"
                  f"(「決定」以外 {sum(1 for s in all_items if s.status != SETTLED)}件)"]
         lang = registry.get(self.language) if self.language else None
+        if lang and lang.check_grammar:
+            if self.grammar is None:
+                lines.append("文法文書との照合: 文法文書がない(grammar/ に置く)")
+            else:
+                name, text = self.grammar
+                diffs = lang.check_grammar(text, self.rules)
+                lines.append(f"文法文書({name})との表の照合: " + (f"食い違い {len(diffs)}件" if diffs else "食い違いなし"))
+                if diffs:
+                    self._add_problems("文法文書との表の食い違い(表の正は規則ファイル)", diffs)
         if lang and lang.check_rules:
             problems = lang.check_rules(self.rules)
             if problems:
                 lines.append(f"{lang.name}の規則としての点検: {len(problems)}件")
-                problem_root = QTreeWidgetItem(["点検で見つかった問題", "", ""])
-                for msg in problems:
-                    problem_root.addChild(QTreeWidgetItem([msg, "", ""]))
-                self.tree.insertTopLevelItem(0, problem_root)
-                problem_root.setExpanded(True)
+                self._add_problems("点検で見つかった問題", problems)
             else:
                 lines.append(f"{lang.name}の規則としての点検: 問題なし")
         self.summary.setText("\n".join(lines))

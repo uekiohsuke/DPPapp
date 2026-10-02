@@ -139,7 +139,7 @@ def morpheme_parses(s, lexicon, limit=50):
 
 
 def join_parts(forms):
-    """部品をつなぐ。前の語末と次の語頭が同じ母音(wo を含む)なら1つにまとめる【仮】(thai + idra → thaidra)。
+    """部品をつなぐ。前の語末と次の語頭が同じ母音(wo を含む)なら1つにまとめる【決定】(thai + idra → thaidra)。
     語の中に同じ母音が並ぶことは、音韻規則(secpute.ztl)で除外されているため"""
     s = forms[0]
     notes = []
@@ -148,7 +148,7 @@ def join_parts(forms):
         _, b = phoneme_parses(f)
         if a and b and a[-1] in VOWELS and a[-1] == b[0]:
             s += f[len(b[0]):]
-            notes.append(f"母音 {b[0]} が連続するのでまとめた【仮】")
+            notes.append(f"母音 {b[0]} が連続するのでまとめた")
         else:
             s += f
     return s, notes
@@ -194,7 +194,7 @@ def check(forms, parts, intended=None):
             res["warnings"].append(f"語の中に現れない並び「{bad}」を含む(音韻規則)")
     for bad in FORBIDDEN_PROVISIONAL:
         if bad in word:
-            res["warnings"].append(f"同じ母音が並ぶ「{bad}」を含む【仮】")
+            res["warnings"].append(f"同じ母音が並ぶ「{bad}」を含む")
     if word in heads:
         h = heads[word]
         res["warnings"].append(f"すでに辞書にある語と同じ綴り: {word}({'、'.join(h['meanings'])})")

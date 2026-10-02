@@ -130,7 +130,10 @@ def test_issues_panel(win):
     win.editor.apply_button.click()
     texts = [win.issue_list.item(i).text() for i in range(win.issue_list.count())]
     assert any("同じ綴り" in t for t in texts)
-    assert "警告(2件)" == win.issue_dock.windowTitle()
+    # tchu が辞書からなくなったので、kabotchu の語源欄(kabo-tchu)の部品も読めなくなる(M4 の検査)
+    assert any("語源欄の部品 tchu" in t for t in texts)
+    assert "警告(誤り 3件・注意 0件)" == win.issue_dock.windowTitle()
+    assert texts[0].startswith("[誤り]")
 
 
 def test_export(win, tmp_path, project):
@@ -162,6 +165,29 @@ def test_rules_panel(win, project):
     win.rules_panel.only_unsettled.setChecked(False)
     assert win.rules_panel.tree.topLevelItemCount() > len(paths)
     assert project.rules_path.exists()
+    assert "文法文書がない" in win.rules_panel.summary.text()
+
+
+def test_rules_panel_grammar_check(win, project):
+    from conftest import FIXTURES
+    project.import_rules(FIXTURES / "mini_rules.yaml")
+    g = (FIXTURES / "mini-grammar.md").read_text(encoding="utf-8")
+    (project.grammar_dir / "mini-grammar.md").write_text(g.replace("| 過去 | -es |", "| 過去 | -is |"), encoding="utf-8")
+    win.reload_rules()
+    assert "文法文書(mini-grammar.md)との表の照合: 食い違い 1件" in win.rules_panel.summary.text()
+    top = win.rules_panel.tree.topLevelItem(0)
+    assert top.text(0).startswith("文法文書との表の食い違い") and "過去" in top.child(0).text(0)
+
+
+def test_issues_use_rules(win, project):
+    """規則ファイルの旧用語の対応が、警告に使われる"""
+    from conftest import FIXTURES
+    project.import_rules(FIXTURES / "mini_rules.yaml")
+    w = win.dictionary.get(1)
+    w["contents"][0]["text"] = "旧称の説明"
+    win.reload_rules()
+    texts = [win.issue_list.item(i).text() for i in range(win.issue_list.count())]
+    assert any("[誤り][旧用語]" in t for t in texts)
 
 
 def test_relation_link(win):

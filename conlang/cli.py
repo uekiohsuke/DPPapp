@@ -7,6 +7,9 @@
   conlang verify FILE                                読んで書き戻したときに、元と同じになるかを確かめる(書き込まない)
   conlang rules import DIR FILE                      規則ファイル(YAML)を取り込む(元のファイルはコピーするだけ)
   conlang rules show DIR|FILE [--all]                「決定」以外の規則の一覧と、言語別の点検
+  conlang grammar import DIR FILE                    文法文書(Markdown)をプロジェクトの grammar/ に取り込む
+  conlang check DIR|FILE [--rules FILE] [--language ID] [--errors-only]
+                                                     辞書の整合性チェック(誤記、旧用語、音素、似た綴り など)
   conlang gui [DIR]                                  画面を開く(DIR を省くと、前に開いたプロジェクト)
   conlang <言語> [--project DIR | --dict FILE] ...    言語別機能(例: conlang pute find 力)
 """
@@ -131,6 +134,39 @@ def cmd_rules_show(a) -> int:
     return 0
 
 
+def cmd_grammar_import(a) -> int:
+    p = Project.open(a.dir)
+    bak = p.import_grammar(a.file)
+    print(f"取り込んだ: {a.file} → {p.grammar_dir / Path(a.file).name}")
+    if bak:
+        print(f"  前の文書のバックアップ: {bak}")
+    return 0
+
+
+def cmd_check(a) -> int:
+    from .core.validate import ERROR, check_all
+    path = Path(a.target)
+    rules, lang_id = None, a.language
+    if path.is_dir():
+        p = Project.open(path)
+        d, rules = p.load_dictionary(), p.load_rules()
+        lang_id = lang_id or p.language
+        path = p.dictionary_path
+    else:
+        d = Dictionary.load(path)
+    if a.rules:
+        rules = Rules.load(a.rules)
+    lang = registry.get(lang_id)
+    issues = check_all(d, rules, lang)
+    errors = [i for i in issues if i.level == ERROR]
+    shown = errors if a.errors_only else issues
+    print(f"{path}({len(d)}項目、規則 {rules.path if rules else 'なし'}、言語別の検査 {lang.name if lang else 'なし'})")
+    print(f"  誤り {len(errors)}件(語 {len({i.word_id for i in errors})}個)、注意 {len(issues) - len(errors)}件")
+    for i in sorted(shown, key=lambda i: (i.level != ERROR, i.word_id if i.word_id is not None else -1)):
+        print(f"  [{i.level}] #{i.word_id} {i.kind}: {i.message}")
+    return 1 if errors else 0
+
+
 def cmd_language(lang: registry.LanguageModule, argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog=f"conlang {lang.id}", add_help=False)
     g = ap.add_mutually_exclusive_group()
@@ -138,20 +174,16 @@ def cmd_language(lang: registry.LanguageModule, argv: list[str]) -> int:
     g.add_argument("--dict")
     ap.add_argument("--rules")
     a, rest = ap.parse_known_args(argv)
-    r = None
+    ctx = registry.Context()
     if a.project:
-        p = Project.open(a.project)
-        d = p.load_dictionary()
-        r = p.load_rules()
+        ctx.project = Project.open(a.project)
+        ctx.dictionary = ctx.project.load_dictionary()
+        ctx.rules = ctx.project.load_rules()
     elif a.dict or os.environ.get("PUTE_DICT"):
-        d = Dictionary.load(a.dict or os.environ["PUTE_DICT"])
-    else:
-        print(f"辞書を --project DIR か --dict FILE で指定する")
-        return 2
+        ctx.dictionary = Dictionary.load(a.dict or os.environ["PUTE_DICT"])
     if a.rules:
-        r = Rules.load(a.rules)
-    lang.cli(rest, d, r)
-    return 0
+        ctx.rules = Rules.load(a.rules)
+    return lang.cli(rest, ctx) or 0
 
 
 def cmd_gui(a) -> int:
@@ -196,6 +228,18 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--all", action="store_true", help="「決定」の規則も出す")
     t.add_argument("--language", help="点検に使う言語別機能の id(プロジェクトなら省ける)")
     t.set_defaults(func=cmd_rules_show)
+    s = sub.add_parser("grammar", help="文法文書")
+    gsub = s.add_subparsers(dest="grammar_cmd", required=True)
+    t = gsub.add_parser("import", help="文法文書をプロジェクトに取り込む")
+    t.add_argument("dir")
+    t.add_argument("file")
+    t.set_defaults(func=cmd_grammar_import)
+    s = sub.add_parser("check", help="辞書の整合性チェック")
+    s.add_argument("target", help="プロジェクトのフォルダか、辞書ファイル")
+    s.add_argument("--rules", help="規則ファイル(プロジェクトなら省ける)")
+    s.add_argument("--language", help="言語別の検査の id(プロジェクトなら省ける)")
+    s.add_argument("--errors-only", action="store_true", help="「誤り」だけ出す")
+    s.set_defaults(func=cmd_check)
     s = sub.add_parser("gui", help="画面を開く")
     s.add_argument("dir", nargs="?")
     s.set_defaults(func=cmd_gui)

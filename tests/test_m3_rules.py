@@ -150,12 +150,12 @@ def test_check_uses_phonotactics(mini_pute, mini_rules):
     assert not any("現れない並び" in w for w in res["warnings"])
     # 部品の境目で同じ母音が並ぶときは、まとめるので aa にならない
     res = zougo.check(["jeta", "abo"], parts)
-    assert res["word"] == "jetabo" and res["notes"] == ["母音 a が連続するのでまとめた【仮】"]
+    assert res["word"] == "jetabo" and res["notes"] == ["母音 a が連続するのでまとめた"]
     # 部品の中にあるときは、音韻規則の警告になる
     res = zougo.check(["kaab", "tchu"], parts)
     assert "語の中に現れない並び「aa」を含む(音韻規則)" in res["warnings"]
     res = zougo.check(["kuub"], parts)
-    assert "同じ母音が並ぶ「uu」を含む【仮】" in res["warnings"]
+    assert "同じ母音が並ぶ「uu」を含む" in res["warnings"]
 
 
 def test_vowel_merge_includes_wo():
@@ -217,12 +217,15 @@ def test_real_rules_load_clean():
 
 @needs_real_rules
 def test_real_rules_match_zougo_defaults():
-    """試作の初期値と規則ファイルが同じ(規則を読めないときも、同じように動く)"""
+    """試作の初期値と規則ファイルが同じ(規則を読めないときも、同じように動く)。
+    除外する並びは、正式と【仮】の分け方が変わることがあるので、合わせた集合で比べる"""
+    def snapshot():
+        return (sorted(zougo.PHONEMES), sorted(zougo.FORBIDDEN + zougo.FORBIDDEN_PROVISIONAL),
+                zougo.LENGTH_WEIGHTS, zougo.GEN_FILTERS)
     zougo.apply_rules(None)
-    before = (sorted(zougo.PHONEMES), zougo.FORBIDDEN, zougo.FORBIDDEN_PROVISIONAL, zougo.LENGTH_WEIGHTS, zougo.GEN_FILTERS)
+    before = snapshot()
     zougo.apply_rules(Rules.load(REAL_RULES).data)
-    after = (sorted(zougo.PHONEMES), zougo.FORBIDDEN, zougo.FORBIDDEN_PROVISIONAL, zougo.LENGTH_WEIGHTS, zougo.GEN_FILTERS)
-    assert before == after
+    assert snapshot() == before
 
 
 def _grammar_table(text, heading):
