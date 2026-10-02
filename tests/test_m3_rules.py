@@ -43,7 +43,7 @@ def test_statuses(mini_rules):
     paths = [s.path for s in r.statuses()]
     assert paths[:3] == ["phonology", "phonotactics", "word_generation"]
     assert "compounding.vowel_merge" in paths and "checks[1]" in paths
-    assert r.statuses()[0].ref == "1.1"
+    assert r.statuses()[0].ref == "vowels→phonology.vowels, consonants→phonology.consonants"
     unsettled = {(s.path, s.status) for s in r.unsettled()}
     assert unsettled == {("phonotactics", "メモ"), ("word_generation", "メモ"), ("compounding.vowel_merge", "仮"),
                          ("compounding.open_question", "未確認"), ("checks[1]", "仮")}
@@ -228,15 +228,19 @@ def test_real_rules_match_zougo_defaults():
     assert snapshot() == before
 
 
-def _grammar_table(text, heading):
-    """文法 md の節 heading の、最後の展開表(| 状態形 | 常態 | …)を {(状態形, 時制): 形} にする"""
-    sec = text.split(heading, 1)[1].split("\n### ", 1)[0]
-    rows = [l for l in sec.splitlines() if l.startswith("| ")]
-    start = max(i for i, l in enumerate(rows) if l.startswith("| 状態形 |"))
-    header = [c.strip() for c in rows[start].strip("|").split("|")]
+def _grammar_table(text, anchor):
+    """文法 md の目印 anchor のあとにある最初の展開表(| 状態形 | 常態 | …)を {(状態形, 時制): 形} にする。
+    節の番号は使わない(仕様書 4.7)"""
+    lines = text.split(f"<!-- rule: {anchor} -->", 1)[1].splitlines()
+    start = next(i for i, l in enumerate(lines) if l.startswith("| 状態形 |"))
+    header = [c.strip() for c in lines[start].strip("|").split("|")]
     out = {}
-    for l in rows[start + 1:]:
+    for l in lines[start + 1:]:
+        if not l.startswith("|"):
+            break
         cells = [c.strip() for c in l.strip("|").split("|")]
+        if all(re.fullmatch(r"-+", c) for c in cells):
+            continue
         state = re.sub(r"(状態)?形$", "", cells[0])
         for t, f in zip(header[1:], cells[1:]):
             out[(state, t)] = f
@@ -246,11 +250,11 @@ def _grammar_table(text, heading):
 @needs_real_rules
 @pytest.mark.skipif(not REAL_GRAMMAR.exists(), reason="data/pute2-grammar.md がない")
 def test_real_inflection_matches_grammar_md():
-    """規則ファイルから作った活用表が、文法 md(8.1、8.2)の展開表と一致する"""
+    """規則ファイルから作った活用表が、文法 md の展開表(状態形の表のあと)と一致する"""
     r = Rules.load(REAL_RULES)
     text = REAL_GRAMMAR.read_text(encoding="utf-8")
-    for heading, cls in (("### 8.1", "noun"), ("### 8.2", "verb")):
-        expected = _grammar_table(text, heading)
+    for anchor, cls in (("inflection.noun.state", "noun"), ("inflection.verb.state", "verb")):
+        expected = _grammar_table(text, anchor)
         got = {(f.state, f.tense): f.form for f in PR.inflection_table(r, cls)}
         assert got == expected, cls
 

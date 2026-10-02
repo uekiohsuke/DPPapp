@@ -10,6 +10,8 @@
   conlang grammar import DIR FILE                    文法文書(Markdown)をプロジェクトの grammar/ に取り込む
   conlang check DIR|FILE [--rules FILE] [--language ID] [--errors-only]
                                                      辞書の整合性チェック(誤記、旧用語、音素、似た綴り など)
+  conlang llm config [--url URL] [--model M]         LLM の接続先(OpenAI 互換)を見る・設定する
+  conlang llm models | ask "質問"                    接続先のモデルの一覧 / 1回だけ問い合わせる
   conlang gui [DIR]                                  画面を開く(DIR を省くと、前に開いたプロジェクト)
   conlang <言語> [--project DIR | --dict FILE] ...    言語別機能(例: conlang pute find 力)
 """
@@ -167,6 +169,51 @@ def cmd_check(a) -> int:
     return 1 if errors else 0
 
 
+def cmd_llm_config(a) -> int:
+    from .core import llm
+    cfg = llm.load_config()
+    changed = False
+    for name in ("url", "model", "key"):
+        v = getattr(a, name)
+        if v is not None:
+            setattr(cfg, name, v)
+            changed = True
+    if a.temperature is not None:
+        cfg.temperature, changed = a.temperature, True
+    if a.timeout is not None:
+        cfg.timeout, changed = a.timeout, True
+    if changed:
+        print(f"保存した: {llm.save_config(cfg)}")
+    print(f"  接続先: {cfg.url}")
+    print(f"  モデル: {cfg.model or '(未設定)'}")
+    print(f"  キー: {'あり' if cfg.key else 'なし'}  温度: {cfg.temperature}  待ち時間: {cfg.timeout}秒")
+    return 0
+
+
+def cmd_llm_models(a) -> int:
+    from .core import llm
+    cfg = llm.load_config()
+    try:
+        models = llm.list_models(cfg)
+    except llm.LLMError as e:
+        print(f"エラー: {e}", file=sys.stderr)
+        return 1
+    print(f"{cfg.url} のモデル({len(models)}個):")
+    for m in models:
+        print(f"  {'*' if m == cfg.model else ' '} {m}")
+    return 0
+
+
+def cmd_llm_ask(a) -> int:
+    from .core import llm
+    try:
+        print(llm.chat(a.prompt))
+    except llm.LLMError as e:
+        print(f"エラー: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def cmd_language(lang: registry.LanguageModule, argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog=f"conlang {lang.id}", add_help=False)
     g = ap.add_mutually_exclusive_group()
@@ -240,6 +287,20 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--language", help="言語別の検査の id(プロジェクトなら省ける)")
     s.add_argument("--errors-only", action="store_true", help="「誤り」だけ出す")
     s.set_defaults(func=cmd_check)
+    s = sub.add_parser("llm", help="LLM の接続")
+    lsub = s.add_subparsers(dest="llm_cmd", required=True)
+    t = lsub.add_parser("config", help="接続先とモデルを見る・設定する")
+    t.add_argument("--url", help="OpenAI 互換 API の URL(例: http://192.168.0.178:11434/v1)")
+    t.add_argument("--model")
+    t.add_argument("--key")
+    t.add_argument("--temperature", type=float)
+    t.add_argument("--timeout", type=int, help="待ち時間(秒)")
+    t.set_defaults(func=cmd_llm_config)
+    t = lsub.add_parser("models", help="接続先のモデルの一覧")
+    t.set_defaults(func=cmd_llm_models)
+    t = lsub.add_parser("ask", help="1回だけ問い合わせる(接続の確認用)")
+    t.add_argument("prompt")
+    t.set_defaults(func=cmd_llm_ask)
     s = sub.add_parser("gui", help="画面を開く")
     s.add_argument("dir", nargs="?")
     s.set_defaults(func=cmd_gui)

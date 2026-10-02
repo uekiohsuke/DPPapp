@@ -4,7 +4,7 @@ grammar_doc: mini-grammar.md
 
 phonology:
   status: 決定
-  ref: "1.1"
+  ref: {vowels: phonology.vowels, consonants: phonology.consonants}
   vowels: [a, e, i, o, u, wo]
   consonants:
     S: [s, sh, sch, sx]
@@ -32,10 +32,17 @@ word_generation:
 affixes:
   verbalizer:
     status: 決定
+    ref: affixes.verbalizer
     forms: {sa: 動詞化}
 
 inflection:
   status: 決定
+  ref:
+    tense.noun: inflection.noun.tense
+    state.noun: inflection.noun.state
+    tense.verb: inflection.verb.tense
+    state.verb: inflection.verb.state
+    classes: inflection.classes
   order: [state, tense]
   tense:
     noun: {常態: "", 現在: as, 過去: es}
@@ -48,6 +55,7 @@ inflection:
     adverb: {same_as: verb, overrides: {"一般.常態": woj}}
 
 compounding:
+  ref: compounding.rules
   head_first: {status: 決定, note: 大本が先頭}
   vowel_merge: {status: 仮, check: vowel_merge}
   open_question: {status: 未確認, note: まだ決めていない}

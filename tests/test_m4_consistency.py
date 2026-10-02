@@ -120,7 +120,7 @@ def test_affix_inside_etymology_part(mini_pute, rules):
 # ---------- 辞書の整合性(実データ: 完了条件) ----------
 
 needs_typo = pytest.mark.skipif(not (REAL_PUTE_TYPO.exists() and REAL_RULES.exists()),
-                                reason="data/secpute-typo.json か data/pute-rules.yaml がない")
+                                reason="data/secondpute_q_with_typos.json か data/pute-rules.yaml がない")
 
 
 @needs_typo
@@ -150,14 +150,16 @@ def test_grammar_tables_match(grammar, rules):
 
 
 @pytest.mark.parametrize("old, new, expected", [
-    ("| 転写 | a | e | i | o | u | wo |", "| 転写 | a | e | i | o | wo |", "文法 1.1(母音): u が規則ファイルにあるが、文法 md にない"),
-    ("| K音 | k [k]、tch [t͡ʃ] |", "| K音 | k [k] |", "文法 1.2(子音): K 系列の子音"),
-    ("| sa- | 動詞化。説明の続き |", "| sa- | 名詞化 |", "文法 2.2(動詞化・被動詞化の接頭辞): sa の意味 が、文法 md は '名詞化'"),
-    ("| 過去 | -es |", "| 過去 | -is |", "文法 8.1(名詞の時制などの語尾): 過去 が、文法 md は 'is'、規則ファイルは 'es'"),
-    ("| 高状態形 | -d |", "| 高状態形 | -dd |", "文法 8.2(動詞の状態形の語尾): 高 が"),
-    ("| X-q | X-qav | X-qev | X-qov |", "| X-q | X-qav | X-qev | X-qiv |", "文法 8.2(動詞の展開表): 低.否定 の形 が、文法 md は 'X-qiv'"),
-    ("形容詞が -wosh", "形容詞が -wod", "文法 8.3(一般形の常態): 形容詞 の語尾 が、文法 md は 'wod'"),
-    ("### 2.2 動詞化の接頭辞", "### 2.9 動詞化の接頭辞", "文法 2.2(動詞化・被動詞化の接頭辞): 文法 md にこの節が見つからない"),
+    ("| 転写 | a | e | i | o | u | wo |", "| 転写 | a | e | i | o | wo |", "[phonology.vowels] 母音: 規則ファイルにだけある ['u']"),
+    ("| K音 | k [k]、tch [t͡ʃ] |", "| K音 | k [k] |", "[phonology.consonants] 子音 K 音: 規則ファイルにだけある ['tch']"),
+    ("| sa- | 動詞化。説明の続き |", "| sa- | 名詞化 |", "[affixes.verbalizer] sa: 文法 md は「名詞化」、規則ファイルは「動詞化」"),
+    ("| 過去 | -es |", "| 過去 | -is |", "[inflection.noun.tense] noun の時制 過去: 文法 md は 'is'、規則ファイルは 'es'"),
+    ("| 高状態形 | -d |", "| 高状態形 | -dd |", "[inflection.verb.state] verb の状態形 高: 文法 md は 'dd'"),
+    # 目印と ref の対応
+    ("<!-- rule: affixes.verbalizer -->", "<!-- rule: affixes.verbaliser -->",
+     "規則ファイルの affixes.verbalizer の ref「affixes.verbalizer」が、文法文書に見つからない"),
+    ("<!-- rule: affixes.verbalizer -->", "<!-- rule: affixes.verbaliser -->",
+     "文法文書の目印「affixes.verbaliser」に対応する規則が、規則ファイルにない"),
 ])
 def test_grammar_table_differences(grammar, rules, old, new, expected):
     assert old in grammar
@@ -165,10 +167,40 @@ def test_grammar_table_differences(grammar, rules, old, new, expected):
     assert any(d.startswith(expected) for d in diffs), diffs
 
 
-def test_grammar_skips_rules_without_data(grammar, rules):
-    """規則ファイルにない項目(格など)は照合しない"""
-    assert "affixes.case_prefix" not in [s.path for s in rules.statuses()]
-    assert not any("文法 5" in d for d in G.check_tables(grammar, rules))
+def test_prose_anchors_go_to_llm(grammar, rules):
+    rep = G.run(grammar, rules)
+    assert (rep.anchors, rep.refs) == (9, 9)
+    assert rep.prose_anchors == ["compounding.rules", "inflection.classes"]
+    pairs = G.llm_pairs(grammar, rules)
+    assert sorted(p.anchor for p in pairs) == ["compounding.rules", "inflection.classes"]
+    assert pairs[0].text == ["- 大本の概念を先頭に置く", "- 同じ母音が並ぶときは1つにまとめる【仮】"]
+    assert set(pairs[0].rules) == {"compounding"} and "vowel_merge" in pairs[0].rules["compounding"]
+    assert pairs[1].rules["inflection.classes"]["adjective"]["overrides"] == {"一般.常態": "wosh"}
+
+
+def _renumber(text: str) -> str:
+    """見出しの番号をすべて書き換え、章の順番も入れ替える(目印はそのまま)"""
+    import re as _re
+    text = _re.sub(r"^(#+) (\d+(\.\d+)*)\.?", lambda m: f"{m.group(1)} 9{m.group(2)}.", text, flags=_re.M)
+    head, rest = text.split("\n## ", 1)
+    chapters = ["## " + c for c in rest.split("\n## ")]
+    return head + "\n" + "\n".join(reversed(chapters))
+
+
+def test_renumbered_grammar_gives_same_result(grammar, rules):
+    """仕様書 M4: 文法 md の節番号を書き換えても、検査が壊れない"""
+    moved = _renumber(grammar)
+    assert "### 1.1" not in moved and "### 91.1." in moved
+    assert G.run(moved, rules) == G.run(grammar, rules)
+    broken = grammar.replace("| 過去 | -es |", "| 過去 | -is |")
+    assert G.check_tables(_renumber(broken), rules) == G.check_tables(broken, rules) != []
+
+
+@pytest.mark.skipif(not (REAL_GRAMMAR.exists() and REAL_RULES.exists()), reason="実データがない")
+def test_real_renumbered_grammar_gives_same_result():
+    text = REAL_GRAMMAR.read_text(encoding="utf-8")
+    r = Rules.load(REAL_RULES)
+    assert G.run(_renumber(text), r) == G.run(text, r)
 
 
 @pytest.mark.skipif(not (REAL_GRAMMAR.exists() and REAL_RULES.exists()), reason="実データがない")
@@ -179,19 +211,24 @@ def test_real_grammar_tables_match():
 
 # ---------- LLM による検査 ----------
 
-ANSWER = {"candidates": [{"section": "2.2", "grammar_quote": "sa- は語幹の前に付く", "rule": "affixes.verbalizer",
-                          "problem": "例の食い違い", "suggestion": "直す", "confidence": "中"}]}
+ANSWER = {"candidates": [{"anchor": "compounding.rules", "grammar_quote": "1つにまとめる【仮】",
+                          "rule": "compounding.vowel_merge", "problem": "文書は【仮】、規則は仮", "suggestion": "直す",
+                          "confidence": "中"}]}
 
 
 def test_llm_prompt_and_answer(grammar, rules):
-    prompt = G.build_llm_prompt(grammar, (FIXTURES / "mini_rules.yaml").read_text(encoding="utf-8"))
-    assert "【規則ファイル】" in prompt and "【文法文書】" in prompt and "sa- は語幹の前に付く" in prompt
-    cands = G.parse_llm_answer("説明\n```json\n" + json.dumps(ANSWER, ensure_ascii=False) + "\n```")
-    assert [(c.section, c.rule, c.confidence) for c in cands] == [("2.2", "affixes.verbalizer", "中")]
+    prompt = G.build_llm_prompt(G.llm_pairs(grammar, rules))
+    assert "【目印: compounding.rules】" in prompt and "【目印: inflection.classes】" in prompt
+    assert "同じ母音が並ぶときは1つにまとめる【仮】" in prompt and "vowel_merge:" in prompt
+    assert "【目印: phonology.vowels】" not in prompt  # 表はコードで調べるので渡さない
+    cands = G.parse_llm_answer("<think>考え {途中}</think>\n```json\n" + json.dumps(ANSWER, ensure_ascii=False) + "\n```")
+    assert [(c.anchor, c.rule, c.confidence) for c in cands] == [("compounding.rules", "compounding.vowel_merge", "中")]
     assert "候補(1件" in G.format_candidates(cands)
     assert "保証ではない" in G.format_candidates([])
     with pytest.raises(ValueError):
         G.parse_llm_answer("答えなし")
+    with pytest.raises(ValueError):
+        G.parse_llm_answer("{壊れた JSON")
 
 
 def test_llm_log(tmp_path):
@@ -223,7 +260,7 @@ def test_cli_grammar_check_with_response(project, tmp_path, capsys):
     assert main(["pute", "--project", str(project.root), "grammar-check"]) == 0
     assert "食い違いはない" in capsys.readouterr().out
     assert main(["pute", "--project", str(project.root), "grammar-check", "--prompt-only"]) == 0
-    assert "【文法文書】" in capsys.readouterr().out
+    assert "【目印: compounding.rules】" in capsys.readouterr().out
     ans = tmp_path / "answer.json"
     ans.write_text(json.dumps(ANSWER, ensure_ascii=False), encoding="utf-8")
     assert main(["pute", "--project", str(project.root), "grammar-check", "--response", str(ans)]) == 1
@@ -240,7 +277,7 @@ def test_cli_grammar_check_finds_table_difference(project, capsys):
     g.write_text(g.read_text(encoding="utf-8").replace("| 過去 | -es |", "| 過去 | -is |"), encoding="utf-8")
     capsys.readouterr()
     assert main(["pute", "--project", str(project.root), "grammar-check"]) == 1
-    assert "! 文法 8.1(名詞の時制などの語尾): 過去 が" in capsys.readouterr().out
+    assert "! [inflection.noun.tense] noun の時制 過去" in capsys.readouterr().out
 
 
 def test_cli_check(project, capsys):

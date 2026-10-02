@@ -43,7 +43,7 @@ LLM による文章の記述の検査は、答えを候補として出すだけ�
 
 辞書や文法などの創作データは git に入れません(`.gitignore`)。
 
-- `data/` … 元のデータ(secondpute.json、secpute-typo.json、uri.json、pute-rules.yaml、pute2-grammar.md、uri-grammar.md)。アプリはここを書き換えない
+- `data/` … 元のデータ(secondpute.json、secondpute_q_with_typos.json、uri.json、pute-rules.yaml、pute2-grammar.md、uri-grammar.md)。アプリはここを書き換えない
 - `projects/` … 言語プロジェクト(`conlang new` で作る)
 
 テストは `tests/fixtures/` の架空の小さな辞書で動きます。`data/` に実データがあれば、実データを使うテストも動きます。
@@ -63,11 +63,15 @@ conlang rules show projects\pute                    # 「決定」以外の規�
 conlang grammar import projects\pute data\pute2-grammar.md   # 文法文書を grammar\ にコピー
 
 conlang check projects\pute                          # 辞書の整合性チェック(誤記、旧用語、音素、似た綴り)
-conlang check data\secpute-typo.json --rules data\pute-rules.yaml --language pute
-conlang pute --project projects\pute grammar-check   # 文法 md と規則ファイルの表の照合(コード)
+conlang check data\secondpute_q_with_typos.json --rules data\pute-rules.yaml --language pute
+conlang pute --project projects\pute grammar-check   # 文法 md の目印と規則ファイルの ref の照合、表の照合(コード)
 conlang pute --project projects\pute grammar-check --prompt-only        # 文章の記述を LLM に調べさせるプロンプト
 conlang pute --project projects\pute grammar-check --response 答え.json # 別のチャットの答えを読み込む
-conlang pute --project projects\pute grammar-check --llm                # API を呼ぶ(PUTE_LLM_URL / PUTE_LLM_MODEL / PUTE_LLM_KEY)
+conlang pute --project projects\pute grammar-check --llm                # 設定した LLM に問い合わせる
+
+conlang llm config --url http://192.168.0.178:11434/v1 --model qwen3.5:27b   # LLM の接続先(この PC の設定)
+conlang llm models                                   # 接続先のモデルの一覧
+conlang llm ask "こんにちは"                          # 接続の確認
 
 conlang pute --project projects\pute inflect noun verb    # 規則から活用表を作る
 conlang pute --project projects\pute gen 10 --seed 1      # 新しい基本詞の候補
@@ -76,6 +80,10 @@ conlang pute --project projects\pute check 節点 外
 conlang pute --project projects\pute suggest 辺 数
 conlang pute --project projects\pute decompose 重力加速度 --prompt-only
 ```
+
+文法 md と規則ファイルは、節の番号ではなく、md の `<!-- rule: ID -->` と規則ファイルの `ref` で対応づけます。章立てや節の番号を変えても、照合は壊れません。
+
+LLM の接続先とモデルは `%APPDATA%\conlang\llm.json` に保存します(リポジトリには入りません)。環境変数 `CONLANG_LLM_URL` / `CONLANG_LLM_MODEL` / `CONLANG_LLM_KEY` があれば、そちらが優先です。
 
 辞書は、元のファイルの書式(Python 風の字下げ / zpdic の書き出し形式、改行コード、末尾の改行)に合わせて書き戻すので、
 内容を変えていなければ保存してもバイト列が変わりません。

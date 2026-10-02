@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from conlang.core import llm_log
+from conlang.core import llm, llm_log
 from conlang.core.registry import Context, LanguageModule, register
 from conlang.core.rules import Rules, RulesError
 
@@ -16,7 +16,7 @@ USAGE_GRAMMAR = """\
 conlang pute [--project DIR] [--rules FILE] grammar-check [--grammar FILE] [--prompt-only | --llm | --response FILE] [--force]
   表(音素、接辞、語尾、活用表)の食い違いをコードで調べる。
   --prompt-only   文章の記述を LLM に調べさせるためのプロンプトを出す(好きなチャットに貼る)
-  --llm           LLM の API を呼ぶ(環境変数 PUTE_LLM_URL / PUTE_LLM_MODEL / PUTE_LLM_KEY)
+  --llm           LLM の API を呼ぶ(接続先は conlang llm config で設定する)
   --response FILE 別のチャットの答えを読み込む
   --force         文法文書と規則ファイルが前回から変わっていなくても、LLM に調べさせる
 """
@@ -56,18 +56,22 @@ def _grammar_check(argv: list[str], ctx: Context) -> int:
         print("文法文書が見つからない。--grammar FILE で指定するか、conlang grammar import で取り込む")
         return 2
     grammar = path.read_text(encoding="utf-8-sig")
-    rules_text = r.path.read_text(encoding="utf-8-sig") if r.path else ""
+    rules_text = r.path.read_text(encoding="utf-8-sig") if r.path else repr(r.data)
 
-    diffs = grammar_check.check_tables(grammar, r)
-    print(f"{path} と {r.path or '規則'} の表の照合(表の正は規則ファイル):")
+    rep = grammar_check.run(grammar, r)
+    diffs = rep.problems
+    print(f"{path} と {r.path or '規則'} の照合(目印 {rep.anchors}個、ref {rep.refs}個。表の正は規則ファイル):")
     if diffs:
         for d in diffs:
             print(f"  ! {d}")
     else:
         print("  食い違いはない")
+    if rep.prose_anchors:
+        print("  文章の記述なので LLM に調べさせる目印: " + "、".join(rep.prose_anchors))
     print()
 
-    prompt = grammar_check.build_llm_prompt(grammar, rules_text)
+    pairs = grammar_check.llm_pairs(grammar, r)
+    prompt = grammar_check.build_llm_prompt(pairs)
     if "--prompt-only" in argv:
         print(prompt)
         return 1 if diffs else 0
@@ -81,9 +85,21 @@ def _grammar_check(argv: list[str], ctx: Context) -> int:
     if resp is None and log_dir and "--force" not in argv and not llm_log.inputs_changed(log_dir, GRAMMAR_CHECK, inputs):
         print("文法文書と規則ファイルは、前回 LLM に調べさせたときから変わっていない。もう一度調べるときは --force")
         return 1 if diffs else 0
-    answer = Path(resp).read_text(encoding="utf-8-sig") if resp else zougo.call_llm(prompt)
+    model = "(貼り付けた答え)"
+    if resp:
+        answer = Path(resp).read_text(encoding="utf-8-sig")
+    else:
+        cfg = llm.load_config()
+        model = f"{cfg.model} @ {cfg.url}"
+        print(f"LLM に問い合わせている: {model}(目印 {len(pairs)}個)")
+        try:
+            answer = llm.chat(prompt, cfg, json_mode=True)
+        except llm.LLMError as e:
+            print(f"エラー: {e}")
+            return 1
     if log_dir:
-        saved = llm_log.save_call(log_dir, GRAMMAR_CHECK, prompt, answer, grammar=str(path), rules=str(r.path or ""))
+        saved = llm_log.save_call(log_dir, GRAMMAR_CHECK, prompt, answer, model=model,
+                                  grammar=str(path), rules=str(r.path or ""))
         print(f"(履歴: {saved})")
     try:
         cands = grammar_check.parse_llm_answer(answer)

@@ -87,4 +87,6 @@ class Rules:
 
 
 def _opt(v):
+    if isinstance(v, dict):  # ref: {ブロック内のキー: 目印の ID}
+        return ", ".join(f"{k}→{x}" for k, x in v.items())
     return None if v is None else str(v)

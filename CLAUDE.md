@@ -19,8 +19,10 @@
 - 辞書は zpdic 形式(`words` / `zpdic` / `snoj`)。未知のキーも含め、読んだ内容をすべて保ったまま書き戻す
 - 規則は言語ごとの YAML(プロジェクトの `rules.yaml`、元は `data/pute-rules.yaml`)。データで書けるものは YAML、手続きはコード。YAML の読み込みと status の一覧は `conlang/core/rules.py`、中身の解釈は言語別機能(`conlang/languages/pute/rules.py`)
 - 規則ファイルと文法 md は役割が違う(仕様書 4.7)。片方からもう片方を生成しない。表の食い違いはコード(`pute/grammar_check.py`)、文章の矛盾は LLM の候補で見つける
+- 文法 md と規則ファイルの対応づけは、節番号ではなく目印 `<!-- rule: ID -->` と `ref` キーで行う(`core/rule_docs.py`)。検査のコードに節番号を書かない。規則を足すときは目印と ref の両方を足す
 - 整合性チェック: 共通の検査は `core/validate.py`(段階は「誤り」「注意」)、言語別の検査は registry の `check_dictionary` で足す(ピュテ語は `pute/consistency.py`)。修正済みの辞書で「誤り」が0件になること(誤検出がない)を保つ
 - LLM の呼び出しは、プロンプトと答えを `core/llm_log.py` でプロジェクトの `llm_log/` に残す
+- LLM は OpenAI 互換の API を `core/llm.py` で呼ぶ。本人の環境はローカルの Ollama(http://192.168.0.178:11434/v1)。接続先とモデルは利用者の設定(%APPDATA%\conlang\llm.json、`conlang llm config`)で、リポジトリに書かない。テストは偽のサーバーで行い、本物の LLM を前提にしない
 - `conlang/languages/pute/zougo.py` は試作を取り込んだもの。試作が更新されたら、ロジックを取り込み直す(規則はモジュール全体の値なので、使う前に `apply_rules()` で入れる)
 - 創作データ(`data/`、`projects/`、文法の Markdown)は git に入れない。テストには `tests/fixtures/` の架空データを使い、実データが必要なテストは `data/` にあるときだけ動かす(skipif)
 

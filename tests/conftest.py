@@ -12,7 +12,7 @@ DATA = ROOT / "data"
 
 # 実データ(git 管理外)。置いてあるときだけ動くテストに使う
 REAL_PUTE = DATA / "secondpute.json"
-REAL_PUTE_TYPO = DATA / "secpute-typo.json"  # 仕様書の secondpute_q_with_typos.json に当たる
+REAL_PUTE_TYPO = DATA / "secondpute_q_with_typos.json"  # 誤記6件と旧用語1件を含むままの辞書
 REAL_RULES = DATA / "pute-rules.yaml"
 REAL_GRAMMAR = DATA / "pute2-grammar.md"
 REAL_URI = DATA / "uri.json"
