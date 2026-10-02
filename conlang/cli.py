@@ -173,7 +173,7 @@ def cmd_llm_config(a) -> int:
     from .core import llm
     cfg = llm.load_config()
     changed = False
-    for name in ("url", "model", "key"):
+    for name in ("url", "model", "key", "reasoning_effort"):
         v = getattr(a, name)
         if v is not None:
             setattr(cfg, name, v)
@@ -186,7 +186,8 @@ def cmd_llm_config(a) -> int:
         print(f"保存した: {llm.save_config(cfg)}")
     print(f"  接続先: {cfg.url}")
     print(f"  モデル: {cfg.model or '(未設定)'}")
-    print(f"  キー: {'あり' if cfg.key else 'なし'}  温度: {cfg.temperature}  待ち時間: {cfg.timeout}秒")
+    print(f"  キー: {'あり' if cfg.key else 'なし'}  温度: {cfg.temperature}  待ち時間: {cfg.timeout}秒"
+          f"  考える過程: {cfg.reasoning_effort or '(モデルの既定)'}")
     return 0
 
 
@@ -295,6 +296,8 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--key")
     t.add_argument("--temperature", type=float)
     t.add_argument("--timeout", type=int, help="待ち時間(秒)")
+    t.add_argument("--reasoning-effort", dest="reasoning_effort",
+                   help="考える過程の量(none / low / medium / high。none で止める。空文字で送らない)")
     t.set_defaults(func=cmd_llm_config)
     t = lsub.add_parser("models", help="接続先のモデルの一覧")
     t.set_defaults(func=cmd_llm_models)

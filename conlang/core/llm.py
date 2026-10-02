@@ -29,6 +29,8 @@ class LLMConfig:
     key: str = ""
     temperature: float = 0.2
     timeout: int = 600
+    # 考える過程を出すモデル(qwen3 など)の量。"none" で止める(Ollama の OpenAI 互換 API)。空なら送らない
+    reasoning_effort: str = ""
 
     @property
     def ready(self) -> bool:
@@ -102,6 +104,8 @@ def chat(prompt: str, cfg: LLMConfig | None = None, json_mode: bool = False) -> 
     body = {"model": cfg.model, "temperature": cfg.temperature, "messages": [{"role": "user", "content": prompt}]}
     if json_mode:
         body["response_format"] = {"type": "json_object"}
+    if cfg.reasoning_effort:
+        body["reasoning_effort"] = cfg.reasoning_effort
     data = _request(cfg, "/chat/completions", body)
     try:
         return data["choices"][0]["message"]["content"]

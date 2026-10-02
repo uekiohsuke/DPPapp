@@ -69,7 +69,7 @@ conlang pute --project projects\pute grammar-check --prompt-only        # 文章
 conlang pute --project projects\pute grammar-check --response 答え.json # 別のチャットの答えを読み込む
 conlang pute --project projects\pute grammar-check --llm                # 設定した LLM に問い合わせる
 
-conlang llm config --url http://192.168.0.178:11434/v1 --model qwen3.5:27b   # LLM の接続先(この PC の設定)
+conlang llm config --url http://192.168.0.178:11434/v1 --model qwen3.5:27b --reasoning-effort none   # LLM の接続先(この PC の設定)
 conlang llm models                                   # 接続先のモデルの一覧
 conlang llm ask "こんにちは"                          # 接続の確認
 

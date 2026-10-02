@@ -88,7 +88,12 @@ def test_chat_and_models(server):
     assert body["model"] == "m" and body["messages"] == [{"role": "user", "content": "質問"}]
     assert body["response_format"] == {"type": "json_object"}
     assert headers["Authorization"] == "Bearer secret"
+    assert "reasoning_effort" not in body  # 既定では送らない
     assert llm.list_models(cfg) == ["a-model", "b-model"]
+    cfg.reasoning_effort = "none"
+    llm.chat("質問", cfg)
+    body = server.requests[-1][2]
+    assert body["reasoning_effort"] == "none" and "response_format" not in body
 
 
 def test_chat_errors(tmp_path):
