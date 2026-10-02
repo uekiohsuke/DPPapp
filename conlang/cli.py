@@ -5,6 +5,8 @@
   conlang info DIR|FILE                              辞書の項目数などを出す
   conlang save DIR                                   辞書を読んで書き戻す(保存前にバックアップする)
   conlang verify FILE                                読んで書き戻したときに、元と同じになるかを確かめる(書き込まない)
+  conlang rules import DIR FILE                      規則ファイル(YAML)を取り込む(元のファイルはコピーするだけ)
+  conlang rules show DIR|FILE [--all]                「決定」以外の規則の一覧と、言語別の点検
   conlang gui [DIR]                                  画面を開く(DIR を省くと、前に開いたプロジェクト)
   conlang <言語> [--project DIR | --dict FILE] ...    言語別機能(例: conlang pute find 力)
 """
@@ -20,7 +22,8 @@ from pathlib import Path
 
 from .core import registry
 from .core.project import Project, ProjectError
-from .core.zpdic import Dictionary, ZpdicError, dumps
+from .core.rules import Rules, RulesError
+from .core.zpdic import Dictionary, ZpdicError
 
 
 def _sha(b: bytes) -> str:
@@ -88,20 +91,66 @@ def cmd_verify(a) -> int:
     return 0 if same_content else 1
 
 
+def cmd_rules_import(a) -> int:
+    p = Project.open(a.dir)
+    bak = p.import_rules(a.file)
+    r = p.load_rules()
+    print(f"取り込んだ: {a.file} → {p.rules_path}({r.language or '言語名なし'})")
+    if bak:
+        print(f"  前の規則のバックアップ: {bak}")
+    return 0
+
+
+def cmd_rules_show(a) -> int:
+    path = Path(a.target)
+    lang_id = a.language
+    if path.is_dir():
+        p = Project.open(path)
+        r = p.load_rules()
+        if r is None:
+            print(f"規則ファイルがない: {p.rules_path}(conlang rules import で取り込む)")
+            return 1
+        lang_id = lang_id or p.language
+    else:
+        r = Rules.load(path)
+    print(f"{r.path}({r.language or '言語名なし'})")
+    items = r.statuses() if a.all else r.unsettled()
+    counts = Counter(s.status for s in r.statuses())
+    print("  状態: " + "、".join(f"{k} {v}件" for k, v in counts.items()))
+    print(f"  {'すべての規則' if a.all else '「決定」以外の規則'}:")
+    for s in items:
+        extra = "".join(f"  {label}: {v}" for label, v in (("ref", s.ref), ("id", s.id), ("注", s.note)) if v)
+        print(f"    [{s.status}] {s.path}{extra}")
+    lang = registry.get(lang_id) if lang_id else None
+    if lang and lang.check_rules:
+        problems = lang.check_rules(r)
+        print(f"  {lang.name}の規則としての点検: " + ("問題なし" if not problems else f"{len(problems)}件"))
+        for msg in problems:
+            print(f"    ! {msg}")
+        return 1 if problems else 0
+    return 0
+
+
 def cmd_language(lang: registry.LanguageModule, argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog=f"conlang {lang.id}", add_help=False)
     g = ap.add_mutually_exclusive_group()
     g.add_argument("--project")
     g.add_argument("--dict")
+    ap.add_argument("--rules")
     a, rest = ap.parse_known_args(argv)
+    r = None
     if a.project:
-        d = Project.open(a.project).load_dictionary()
+        p = Project.open(a.project)
+        d = p.load_dictionary()
+        r = p.load_rules()
     elif a.dict or os.environ.get("PUTE_DICT"):
         d = Dictionary.load(a.dict or os.environ["PUTE_DICT"])
     else:
         print(f"辞書を --project DIR か --dict FILE で指定する")
         return 2
-    lang.cli(rest, d)
+    if a.rules:
+        r = Rules.load(a.rules)
+    lang.cli(rest, d, r)
     return 0
 
 
@@ -136,6 +185,17 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("verify", help="往復で壊れないか確かめる")
     s.add_argument("file")
     s.set_defaults(func=cmd_verify)
+    s = sub.add_parser("rules", help="規則ファイル(YAML)")
+    rsub = s.add_subparsers(dest="rules_cmd", required=True)
+    t = rsub.add_parser("import", help="規則ファイルをプロジェクトに取り込む")
+    t.add_argument("dir")
+    t.add_argument("file")
+    t.set_defaults(func=cmd_rules_import)
+    t = rsub.add_parser("show", help="規則の状態の一覧と点検")
+    t.add_argument("target", help="プロジェクトのフォルダか、規則ファイル")
+    t.add_argument("--all", action="store_true", help="「決定」の規則も出す")
+    t.add_argument("--language", help="点検に使う言語別機能の id(プロジェクトなら省ける)")
+    t.set_defaults(func=cmd_rules_show)
     s = sub.add_parser("gui", help="画面を開く")
     s.add_argument("dir", nargs="?")
     s.set_defaults(func=cmd_gui)
@@ -150,7 +210,7 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_language(lang, argv[1:])
         a = build_parser().parse_args(argv)
         return a.func(a)
-    except (ProjectError, ZpdicError, FileNotFoundError) as e:
+    except (ProjectError, ZpdicError, RulesError, FileNotFoundError) as e:
         print(f"エラー: {e}", file=sys.stderr)
         return 1
 

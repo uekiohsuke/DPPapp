@@ -9,6 +9,7 @@ import importlib
 from dataclasses import dataclass
 from typing import Callable
 
+from .rules import Rules
 from .zpdic import Dictionary
 
 
@@ -16,8 +17,10 @@ from .zpdic import Dictionary
 class LanguageModule:
     id: str
     name: str
-    # CLI のサブコマンド: (引数, 辞書) を受け取る
-    cli: Callable[[list[str], Dictionary], None] | None = None
+    # CLI のサブコマンド: (引数, 辞書, 規則[なければ None]) を受け取る
+    cli: Callable[[list[str], Dictionary, Rules | None], None] | None = None
+    # 規則ファイルそのものの点検。問題を文の一覧で返す
+    check_rules: Callable[[Rules], list[str]] | None = None
 
 
 _modules: dict[str, LanguageModule] = {}

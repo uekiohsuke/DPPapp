@@ -2,7 +2,7 @@
 
     言語プロジェクト/
       project.json        言語名、版、作成日、言語別機能の id
-      rules/              規則設定(形式は M3 で決める)
+      rules.yaml          規則設定(YAML)
       dictionary.json     zpdic 形式の辞書
       grammar/            章ごとの Markdown
       examples.json       例文
@@ -18,11 +18,13 @@ from datetime import date
 from pathlib import Path
 
 from .backup import backup_file
+from .rules import Rules
 from .zpdic import Dictionary
 
 PROJECT_FILE = "project.json"
 DICTIONARY_FILE = "dictionary.json"
-SUBDIRS = ("rules", "grammar", "llm_log", "backup")
+RULES_FILE = "rules.yaml"
+SUBDIRS = ("grammar", "llm_log", "backup")
 
 
 class ProjectError(Exception):
@@ -81,6 +83,27 @@ class Project:
     @property
     def backup_dir(self) -> Path:
         return self.root / "backup"
+
+    @property
+    def rules_path(self) -> Path:
+        return self.root / RULES_FILE
+
+    # --- 規則 ---
+
+    def import_rules(self, source: str | Path) -> Path | None:
+        """規則ファイルをプロジェクトの rules.yaml としてコピーする。元のファイルには触れない。
+        今の規則はバックアップしてから置き換える。戻り値はバックアップのパス"""
+        source = Path(source)
+        Rules.load(source)  # 読めることを先に確かめる
+        if self.rules_path.exists() and source.resolve() == self.rules_path.resolve():
+            raise ProjectError("取り込み元とプロジェクトの規則が同じファイル")
+        bak = backup_file(self.rules_path, self.backup_dir)
+        shutil.copyfile(source, self.rules_path)
+        return bak
+
+    def load_rules(self) -> Rules | None:
+        """規則ファイルがなければ None"""
+        return Rules.load(self.rules_path) if self.rules_path.exists() else None
 
     # --- 辞書 ---
 

@@ -1,34 +1,63 @@
-"""ピュテ語 造語支援ツール(標準ライブラリのみ)
+"""ピュテ語 造語支援ツール
 
 prototype/pute_zougo.py を取り込んだもの。ロジックは試作のまま。
 辞書(zpdic 形式)の語を部品として、新しい概念の造語案を作り、検査する。
 
-使い方(辞書は --dict FILE か --project DIR で指定する):
+使い方(辞書は --dict FILE か --project DIR、規則は --rules FILE で指定する):
   conlang pute find 力 数          訳語・語義・語源に キーワード を含む語を探す
   conlang pute check 節点 外        部品をつないだ形を検査する(部品は 見出し語・短縮形・訳語 のどれでもよい)
   conlang pute suggest 辺 数        キーワードごとに部品の候補を出し、組み合わせを検査して順位づけする
   conlang pute parts                部品(見出し語と短縮形)の一覧を出す
+  conlang pute inflect noun X       活用の表を出す(noun / verb / adjective / adverb。規則ファイルから作る)
   conlang pute decompose 重力加速度  LLM に概念を要素へ分解させ、既存語と照らし合わせる
       --prompt-only        LLM に渡すプロンプトだけを出す(好きなチャットに貼って使う)
       --response FILE      LLM の答え(JSON)をファイルから読む
       --memo "補足"        概念についての補足をプロンプトに足す
     API を呼ぶときは、環境変数 PUTE_LLM_URL(既定 http://localhost:11434/v1)、
     PUTE_LLM_MODEL、PUTE_LLM_KEY を設定する。OpenAI 互換の API なら使える
+  conlang pute gen [個数]           新しい基本詞の候補を作る(音韻規則に合い、既存語と衝突しないもの)
+      --len N 音素の数  --seed N 乱数の種  --min-vowels N 母音の最低数
   suggest は、最初のキーワードを大本の概念として、与えた順に並べる(--any-order で並べ替える)
 
+規則は、プロジェクトの rules.yaml か --rules のファイルから読む。どちらもなければ、ここにある初期値を使う。
 辞書を指定しないときは、環境変数 PUTE_DICT のパスを使う。
 """
 import itertools
 import json
 import os
 
-# 音素(1.1, 1.2)。長いものから照合する
+# 音素などの規則。規則ファイル(YAML)から読む(読めないときは、ここにある初期値を使う)
 VOWELS = ["wo", "a", "e", "i", "o", "u"]
 CONSONANTS = ["sch", "tch", "sh", "sx", "tr", "th", "dr", "s", "k", "t", "d", "j", "q", "v", "b"]
 PHONEMES = sorted(VOWELS + CONSONANTS, key=len, reverse=True)
+FORBIDDEN = ["aa", "ee", "ii", "oo", "wowo"]
+FORBIDDEN_PROVISIONAL = ["uu"]
+LENGTH_WEIGHTS = {2: 3, 3: 3, 4: 2, 5: 1}
+GEN_FILTERS = {"not_existing_word": True, "not_readable_as_parts": True, "min_edit_distance": 2,
+               "min_vowels": 1, "max_consonant_run": 2}
 
-# クラス接頭辞(9章)。辞書に「クラス」として載っているものを読み込むほか、分類辞 thke も部品に含める
-SINGLE_VOWELS = ["a", "e", "i", "o", "u"]
+
+_DEFAULTS = dict(VOWELS=VOWELS, CONSONANTS=CONSONANTS, PHONEMES=PHONEMES, FORBIDDEN=FORBIDDEN,
+                 FORBIDDEN_PROVISIONAL=FORBIDDEN_PROVISIONAL, LENGTH_WEIGHTS=LENGTH_WEIGHTS, GEN_FILTERS=GEN_FILTERS)
+
+
+def apply_rules(r=None):
+    """規則(YAML を読んだ dict)で、音素などの規則を差し替える。r が None なら初期値に戻す"""
+    global VOWELS, CONSONANTS, PHONEMES, FORBIDDEN, FORBIDDEN_PROVISIONAL, LENGTH_WEIGHTS, GEN_FILTERS
+    globals().update({k: (dict(v) if isinstance(v, dict) else list(v)) for k, v in _DEFAULTS.items()})
+    if r is None:
+        return False
+    ph = r.get("phonology", {})
+    VOWELS = list(ph.get("vowels", VOWELS))
+    CONSONANTS = [c for group in ph.get("consonants", {}).values() for c in group] or CONSONANTS
+    PHONEMES = sorted(VOWELS + CONSONANTS, key=len, reverse=True)
+    pt = r.get("phonotactics", {})
+    FORBIDDEN = list(pt.get("forbidden_substrings", FORBIDDEN))
+    FORBIDDEN_PROVISIONAL = list(pt.get("forbidden_substrings_provisional", FORBIDDEN_PROVISIONAL))
+    wg = r.get("word_generation", {})
+    LENGTH_WEIGHTS = {int(k): v for k, v in wg.get("length_in_units", LENGTH_WEIGHTS).items()}
+    GEN_FILTERS = {**GEN_FILTERS, **wg.get("filters", {})}
+    return True
 
 
 def load(path):
@@ -105,13 +134,16 @@ def morpheme_parses(s, lexicon, limit=50):
 
 
 def join_parts(forms):
-    """部品をつなぐ。前の語末と次の語頭が同じ単母音なら1つにまとめる【仮】(thai + idra → thaidra)"""
+    """部品をつなぐ。前の語末と次の語頭が同じ母音(wo を含む)なら1つにまとめる【仮】(thai + idra → thaidra)。
+    語の中に同じ母音が並ぶことは、音韻規則(secpute.ztl)で除外されているため"""
     s = forms[0]
     notes = []
     for f in forms[1:]:
-        if s and f and s[-1] in SINGLE_VOWELS and f[0] == s[-1] and not s.endswith("wo"):
-            s += f[1:]
-            notes.append(f"母音 {f[0]} が連続するのでまとめた【仮】")
+        _, a = phoneme_parses(s)
+        _, b = phoneme_parses(f)
+        if a and b and a[-1] in VOWELS and a[-1] == b[0]:
+            s += f[len(b[0]):]
+            notes.append(f"母音 {b[0]} が連続するのでまとめた【仮】")
         else:
             s += f
     return s, notes
@@ -152,6 +184,12 @@ def check(forms, parts, intended=None):
         res["warnings"].append("ピュテ語の音素に分けられない文字を含む")
     elif n_ph > 1:
         res["warnings"].append(f"音素への分け方が{n_ph}通りある")
+    for bad in FORBIDDEN:
+        if bad in word:
+            res["warnings"].append(f"語の中に現れない並び「{bad}」を含む(音韻規則)")
+    for bad in FORBIDDEN_PROVISIONAL:
+        if bad in word:
+            res["warnings"].append(f"同じ母音が並ぶ「{bad}」を含む【仮】")
     if word in heads:
         h = heads[word]
         res["warnings"].append(f"すでに辞書にある語と同じ綴り: {word}({'、'.join(h['meanings'])})")
@@ -312,6 +350,84 @@ def cmd_parts(args, parts):
 
 
 
+
+# ---------- 基本詞の自動生成 ----------
+
+def known_forms(parts):
+    """すでに使われている綴り(見出し語、短縮形)と、接辞の綴り"""
+    forms = {p["form"] for p in parts}
+    return forms
+
+
+def consonant_run(seq):
+    """音素の並びの中で、子音が最大いくつ続くか"""
+    run = best = 0
+    for u in seq:
+        run = 0 if u in VOWELS else run + 1
+        best = max(best, run)
+    return best
+
+
+def generate_words(parts, n=10, length=None, min_vowels=None, seed=None, max_tries=50000):
+    """音韻規則(pute-rules.yaml)に合う新しい基本詞の候補を作る。
+    音素を2〜5個、母音と子音からすべて同じ確率で選ぶ(secpute.ztl と同じ)。
+    そのうえで、既存語との衝突を避けるフィルタを通す"""
+    import random
+    rnd = random.Random(seed)
+    if min_vowels is None:
+        min_vowels = GEN_FILTERS.get("min_vowels", 0)
+    max_run = GEN_FILTERS.get("max_consonant_run")
+    units = VOWELS + CONSONANTS
+    lens, weights = zip(*sorted(LENGTH_WEIGHTS.items()))
+    lex = sorted({p["form"] for p in parts}, key=len, reverse=True)
+    heads = [p["form"] for p in parts if p["kind"] == "見出し語"]
+    known = known_forms(parts)
+    out, tries = [], 0
+    while len(out) < n and tries < max_tries:
+        tries += 1
+        k = length or rnd.choices(lens, weights)[0]
+        seq = [rnd.choice(units) for _ in range(k)]
+        w = "".join(seq)
+        if any(bad in w for bad in FORBIDDEN + FORBIDDEN_PROVISIONAL):
+            continue
+        if sum(1 for u in seq if u in VOWELS) < min_vowels:
+            continue
+        if max_run is not None and consonant_run(seq) > max_run:
+            continue
+        if w in out:
+            continue
+        if phoneme_parses(w)[0] != 1:   # 音素への分け方が1通りでなければ避ける
+            continue
+        if GEN_FILTERS.get("not_existing_word") and w in known:
+            continue
+        if GEN_FILTERS.get("not_readable_as_parts") and morpheme_parses(w, lex, limit=1):
+            continue
+        d = GEN_FILTERS.get("min_edit_distance", 0)
+        if d and any(len(h) >= 3 and edit_distance(w, h) < d for h in heads):
+            continue
+        out.append(w)
+    return out
+
+
+def cmd_gen(args, parts):
+    n, length, seed, min_vowels = 10, None, None, None
+    it = iter(args)
+    for a in it:
+        if a == "--len":
+            length = int(next(it))
+        elif a == "--seed":
+            seed = int(next(it))
+        elif a == "--min-vowels":
+            min_vowels = int(next(it))
+        elif a.isdigit():
+            n = int(a)
+    words = generate_words(parts, n, length, min_vowels, seed)
+    print(f"新しい基本詞の候補({len(words)}個。音素の数 {'指定なし(重み付き)' if not length else length}):")
+    for w in words:
+        print(f"  {w}   ({len(phoneme_parses(w)[1])}音素)")
+    print("\n注: 母音と子音を同じ確率で選び、母音が1個以上・子音の連続が2個以下のものだけを残す【仮】(pute-rules.yaml の filters)")
+
+
 # ---------- LLM による分解 ----------
 
 RULES = """\
@@ -419,6 +535,13 @@ def ground(data, parts):
     return els
 
 
+def suggest_new_words(missing, parts, per=5):
+    """未収録の要素ごとに、新しい基本詞の候補を出す(音韻規則に合い、既存語と衝突しないもの)"""
+    for e in missing:
+        cands = generate_words(parts, per)
+        print(f"  - {e['meaning']}: " + "、".join(cands))
+
+
 def render(concept, els, parts, note=""):
     n = len(els)
     names = []
@@ -446,8 +569,7 @@ def render(concept, els, parts, note=""):
         print("既存語の要素が1つ以下なので、つないだ形の検査は省く。")
         if missing:
             print("\n新しく作る候補の要素(基本詞にするか、別の言い方で既存語に寄せるかを決める):")
-            for e in missing:
-                print(f"  - {e['meaning']}")
+            suggest_new_words(missing, parts)
     elif not missing and forms:
         print("つないだ形の検査:")
         show(check(forms, parts), [describe(e["part"]) for e in els])
@@ -455,8 +577,7 @@ def render(concept, els, parts, note=""):
         print("既存語だけでつないだ部分の検査(未収録の要素は、新しい語ができてから足す):")
         show(check(forms, parts), [describe(e["part"]) for e in els if e["part"]])
         print("\n新しく作る候補の要素(基本詞にするか、別の言い方で既存語に寄せるかを決める):")
-        for e in missing:
-            print(f"  - {e['meaning']}")
+        suggest_new_words(missing, parts)
     print("\n注: 分解の仕方は LLM の提案で、ヒューリスティックなもの。要素と順序は人が決める。")
 
 
@@ -491,11 +612,11 @@ def cmd_decompose(args, parts):
     render(data.get("concept", concept), ground(data, parts), parts, data.get("note", ""))
 
 
-COMMANDS = dict(find=cmd_find, check=cmd_check, suggest=cmd_suggest, parts=cmd_parts, decompose=cmd_decompose)
+COMMANDS = dict(find=cmd_find, check=cmd_check, suggest=cmd_suggest, parts=cmd_parts, decompose=cmd_decompose, gen=cmd_gen)
 
 
 def main(argv, parts):
-    """argv: [コマンド, 引数...]。parts: load() か parts_from_words() で作った部品"""
+    """argv: [コマンド, 引数...]。parts: load() か parts_from_words() で作った部品。規則は先に apply_rules() で入れる"""
     if not argv or argv[0] in ("-h", "--help") or argv[0] not in COMMANDS:
         print(__doc__)
         return

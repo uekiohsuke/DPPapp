@@ -7,7 +7,7 @@ name = "conlang"
 version = "0.1.0"
 description = "自分専用の人工言語創作アプリ(辞書・文法・造語支援)"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["PyYAML>=6"]
 
 [project.optional-dependencies]
 gui = ["PySide6>=6.7"]

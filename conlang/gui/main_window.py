@@ -15,14 +15,17 @@ from PySide6.QtWidgets import (
     QStackedWidget, QTableView, QTextBrowser, QVBoxLayout, QWidget,
 )
 
+from conlang.core import registry
 from conlang.core import search as S
 from conlang.core.backup import backup_file
 from conlang.core.project import Project, ProjectError
+from conlang.core.rules import RulesError
 from conlang.core.validate import check_dictionary
 from conlang.core.wordedit import apply_fields, separator, to_fields
 from conlang.core.zpdic import Dictionary, ZpdicError, form, meanings
 
 from . import word_view
+from .rules_panel import RulesPanel
 from .word_editor import WordEditor
 
 APP_TITLE = "人工言語創作アプリ"
@@ -69,6 +72,7 @@ class WordTableModel(QAbstractTableModel):
 class MainWindow(QMainWindow):
     def __init__(self, settings: QSettings | None = None):
         super().__init__()
+        registry.load_builtin()
         self.settings = settings or QSettings("conlang", "conlang")
         self.project: Project | None = None
         self.dictionary: Dictionary | None = None
@@ -179,6 +183,16 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.BottomDockWidgetArea, dock)
         self.issue_dock = dock
 
+        # 規則
+        self.rules_panel = RulesPanel()
+        rdock = QDockWidget("規則", self)
+        rdock.setObjectName("rules")
+        rdock.setWidget(self.rules_panel)
+        self.addDockWidget(Qt.BottomDockWidgetArea, rdock)
+        self.tabifyDockWidget(dock, rdock)
+        dock.raise_()
+        self.rules_dock = rdock
+
         self._build_menu()
         self._set_enabled(False)
 
@@ -196,6 +210,7 @@ class MainWindow(QMainWindow):
         self._action(m, "プロジェクトを開く…", self.open_project_dialog, QKeySequence.Open)
         m.addSeparator()
         self.import_action = self._action(m, "zpdic 辞書を取り込む…", self.import_dialog)
+        self.import_rules_action = self._action(m, "規則ファイルを取り込む…", self.import_rules_dialog)
         self.save_action = self._action(m, "保存", self.save, QKeySequence.Save)
         self.export_action = self._action(m, "zpdic 形式で書き出す…", self.export_dialog)
         m.addSeparator()
@@ -208,9 +223,11 @@ class MainWindow(QMainWindow):
         self._action(m, "検索欄へ", lambda: self.search_box.setFocus(), QKeySequence.Find)
         m = self.menuBar().addMenu("表示(&V)")
         m.addAction(self.issue_dock.toggleViewAction())
+        m.addAction(self.rules_dock.toggleViewAction())
 
     def _set_enabled(self, on: bool) -> None:
-        for w in (self.left_panel, self.stack, self.import_action, self.save_action, self.export_action,
+        for w in (self.left_panel, self.stack, self.import_action, self.import_rules_action,
+                  self.save_action, self.export_action,
                   self.new_word_action, self.edit_action, self.delete_action):
             w.setEnabled(on)
 
@@ -244,7 +261,35 @@ class MainWindow(QMainWindow):
         self._reload_content_titles()
         self.refresh_list()
         self.refresh_issues()
+        self.reload_rules()
         self.statusBar().showMessage(f"開いた: {project.root}({len(d)}項目)", 5000)
+        return True
+
+    def reload_rules(self) -> None:
+        try:
+            rules = self.project.load_rules()
+        except (RulesError, OSError) as e:
+            rules = None
+            self.error(f"規則ファイルを読めなかった:\n{e}")
+        self.rules_panel.set_rules(rules, self.project.language)
+
+    def import_rules_dialog(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "規則ファイルを取り込む", "", "規則ファイル (*.yaml *.yml)")
+        if path:
+            self.import_rules(path)
+
+    def import_rules(self, path: str | Path) -> bool:
+        if self.ask("規則の取り込み", f"今の規則をバックアップしてから、次の規則に置き換える。\n{path}\n"
+                    "元のファイルは書き換えない。") != QMessageBox.Yes:
+            return False
+        try:
+            bak = self.project.import_rules(path)
+        except (ProjectError, RulesError, OSError) as e:
+            self.error(f"取り込めなかった:\n{e}")
+            return False
+        self.reload_rules()
+        self.rules_dock.raise_()
+        self.statusBar().showMessage("規則を取り込んだ" + (f"。前の規則のバックアップ: {bak}" if bak else ""), 8000)
         return True
 
     def open_project_dialog(self) -> None:

@@ -150,6 +150,20 @@ def test_unsaved_changes_prompt(win):
     assert win.maybe_save()
 
 
+def test_rules_panel(win, project):
+    assert "規則ファイルがない" in win.rules_panel.summary.text()
+    from conftest import FIXTURES
+    win.answers = [QMessageBox.Yes]
+    assert win.import_rules(FIXTURES / "mini_rules.yaml")
+    assert "架空語: 規則" in win.rules_panel.summary.text()
+    assert "ピュテ語の規則としての点検: 問題なし" in win.rules_panel.summary.text()
+    paths = [win.rules_panel.tree.topLevelItem(i).text(0) for i in range(win.rules_panel.tree.topLevelItemCount())]
+    assert "compounding.vowel_merge" in paths and "phonology" not in paths
+    win.rules_panel.only_unsettled.setChecked(False)
+    assert win.rules_panel.tree.topLevelItemCount() > len(paths)
+    assert project.rules_path.exists()
+
+
 def test_relation_link(win):
     win.select_word(5)
     win.edit_current()

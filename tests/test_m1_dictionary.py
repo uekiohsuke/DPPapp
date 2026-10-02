@@ -94,7 +94,7 @@ def test_detect_style_ignores_colon_in_values():
 
 def test_project_layout(tmp_path):
     p = Project.create(tmp_path / "pute", "ピュテ語", "pute")
-    for name in ("project.json", "dictionary.json", "examples.json", "rules", "grammar", "llm_log", "backup"):
+    for name in ("project.json", "dictionary.json", "examples.json", "grammar", "llm_log", "backup"):
         assert (p.root / name).exists()
     assert Project.open(p.root).meta["name"] == "ピュテ語"
     with pytest.raises(ProjectError):

@@ -1,0 +1,57 @@
+# テスト用の架空の規則ファイル(形は pute-rules.yaml と同じ。語尾などの中身は架空)
+language: 架空語
+grammar_doc: mini-grammar.md
+
+phonology:
+  status: 決定
+  ref: "1.1"
+  vowels: [a, e, i, o, u, wo]
+  consonants:
+    S: [s, sh, sch, sx]
+    K: [k, tch]
+    T: [t, tr, th, dr]
+    D: [d, j, q]
+    V: [v, b]
+
+phonotactics:
+  status: メモ
+  forbidden_substrings: [aa, ee, ii, oo, wowo]
+  forbidden_substrings_provisional: [uu]
+
+word_generation:
+  status: メモ
+  units: [vowel, consonant]
+  length_in_units: {2: 3, 3: 3, 4: 2, 5: 1}
+  filters:
+    not_existing_word: true
+    not_readable_as_parts: true
+    min_edit_distance: 2
+    min_vowels: 1
+    max_consonant_run: 2
+
+affixes:
+  verbalizer:
+    status: 決定
+    forms: {sa: 動詞化}
+
+inflection:
+  status: 決定
+  order: [state, tense]
+  tense:
+    noun: {常態: "", 現在: as, 過去: es}
+    verb: {常態: "", 現在: av, 過去: ev, 否定: ov}
+  state:
+    noun: {一般: "", 高: b}
+    verb: {一般: "", 高: d, 低: q}
+  classes:
+    adjective: {same_as: noun, overrides: {"一般.常態": wosh}}
+    adverb: {same_as: verb, overrides: {"一般.常態": woj}}
+
+compounding:
+  head_first: {status: 決定, note: 大本が先頭}
+  vowel_merge: {status: 仮, check: vowel_merge}
+  open_question: {status: 未確認, note: まだ決めていない}
+
+checks:
+  - {id: phoneme_segmentation, status: 決定}
+  - {id: terminology, status: 仮, map: {旧称: 新称}}
