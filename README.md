@@ -36,6 +36,7 @@ python -m venv .venv          # Python 3.11
 - 「設定 → LLM の設定」: 接続先、モデル(「モデルの一覧を取得」で接続先のモデルから選ぶ。Ollama なら大きさと「考える過程あり」も出る)、考える過程の量、温度、待ち時間。「接続を試す」で確かめられる。右下に今のモデルが出る
 - LLM の問い合わせは裏で動くので、待っているあいだも辞書の閲覧・編集ができる。経過時間が出て、「中止」で結果を捨てられる
 - 下の「造語(ピュテ語)」タブ: 検索、組み合わせの検査、提案、形態素分解、短縮の候補、長大語、基本詞の候補、LLM による分解。保存前の編集も使う
+  - LLM による分解は、日本語の語を字面で分けるのではなく、ピュテ語でその概念をどう組み立てるかを考えさせる。意味・説明、分野、区別したい意味(同字異義)を書く欄がある。答えには LLM の解釈が付くので、取り違えていないか確かめられる
 - 下の「規則」タブ: 規則ファイルの「決定」以外の規則、文法文書との表の食い違い、規則ファイルの点検の結果。「ファイル → 規則ファイルを取り込む」で読み込む。「文章の記述を LLM で調べる」で、文章の目印を LLM に調べさせる
 
 LLM による文章の記述の検査は、答えを候補として出すだけで、「問題なし」の保証にはしません。文法文書と規則ファイルが前回から変わっていなければ、API を呼びません(`--force` で呼ぶ)。プロンプトと答えは、プロジェクトの `llm_log\` に残ります。
@@ -85,6 +86,8 @@ conlang pute --project projects\pute analyze thaidra kethjadrwoqakushavo   # 形
 conlang pute --project projects\pute shorten eshkiki judra   # 短縮形を使った候補
 conlang pute --project projects\pute long                    # 長大語(20文字以上)と短縮案
 conlang pute --project projects\pute decompose 重力加速度    # LLM で概念を要素に分け、未収録の要素に基本詞の候補
+conlang pute --project projects\pute decompose 場 --field 物理学 --description "空間の各点に物理量が割り当てられたもの" --distinguish "場所"
+                                                             # 説明・分野・区別したい意味を添えると、同字異義を取り違えにくい
 conlang pute --project projects\pute decompose 重力加速度 --prompt-only
 ```
 

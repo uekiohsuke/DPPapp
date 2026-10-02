@@ -221,6 +221,49 @@ def test_decompose_with_llm_and_history(tmp_path, mini_pute, capsys, monkeypatch
         s.close()
 
 
+# ---------- 概念の説明(同字異義・分野) ----------
+
+def test_prompt_with_concept_description(c):
+    from conlang.languages.pute.coining import ConceptRequest, build_decompose_prompt
+    req = ConceptRequest("次数", description="頂点に接続する辺の数", field="グラフ理論", distinguish="多項式の次数")
+    p = build_decompose_prompt(c, req)
+    assert "【造語したい概念】次数" in p
+    assert "【意味・説明】頂点に接続する辺の数" in p and "【分野】グラフ理論" in p and "【区別したい意味】多項式の次数" in p
+    assert "【補足】" not in p  # 空の欄は送らない
+    assert "日本語の漢字や形態素で分けない" in p
+    assert '"interpretation"' in p
+    # 辞書の複合語を、作り方の例として添える(語源欄の意味の行も)
+    assert "【既存語の作り方の例" in p and "孤立点: kabotchu = kabo-tchu(節点-外)" in p
+    assert "次数: dresijeta = dresi-jeta(辺-数)" in p
+    # 文字列だけでも、これまでどおり動く
+    assert "【補足】メモ" in build_decompose_prompt(c, "次数", memo="メモ")
+
+
+def test_parse_decompose_args():
+    from conlang.languages.pute.cli_coining import parse_decompose_args
+    req, values, prompt_only = parse_decompose_args(
+        ["重力", "加速度", "--desc", "説明", "--field", "物理学", "--not", "比喩の重力", "--memo", "m", "--seed", "3",
+         "--prompt-only"])
+    assert (req.concept, req.description, req.field, req.distinguish, req.memo) == ("重力 加速度", "説明", "物理学", "比喩の重力", "m")
+    assert values["seed"] == "3" and prompt_only
+
+
+def test_decompose_shows_interpretation_and_logs_description(capsys, tmp_path, mini_pute):
+    proj = tmp_path / "x"
+    main(["new", str(proj), "--name", "架空語", "--language", "pute"])
+    main(["import", str(proj), str(mini_pute)])
+    f = tmp_path / "a.json"
+    f.write_text(json.dumps({**ANSWER, "interpretation": "グラフの外側にある道のこと"}, ensure_ascii=False), encoding="utf-8")
+    capsys.readouterr()
+    assert main(["pute", "--project", str(proj), "decompose", "外の道", "--description", "グラフの外の道",
+                 "--field", "グラフ理論", "--response", str(f)]) == 0
+    out = capsys.readouterr().out
+    assert out.index("LLM の解釈: グラフの外側にある道のこと") < out.index("外の道 は、")
+    log = json.loads(next((proj / "llm_log").glob("*-decompose.json")).read_text(encoding="utf-8"))
+    assert (log["description"], log["field"]) == ("グラフの外の道", "グラフ理論")
+    assert "【分野】グラフ理論" in log["prompt"]
+
+
 # ---------- CLI ----------
 
 def test_cli_commands(capsys, mini_pute):

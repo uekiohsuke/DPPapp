@@ -56,7 +56,11 @@ def test_decompose_does_not_block(qtbot, win, slow_server):
     """LLM の答え(1.5秒かかる)を待つあいだも、画面の操作ができる"""
     panel = win.language_docks[("pute", "造語")].widget()
     panel.action.setCurrentIndex(7)  # LLM による分解
-    panel.input.setText("外の道 --seed 1")
+    assert not panel.concept_box.isHidden()  # 説明の欄が出る
+    panel.input.setText("外の道")
+    panel.description.setPlainText("グラフの外側を通る道")
+    panel.field.setText("グラフ理論")
+    panel.distinguish.setText("屋外の道路")
     started = time.monotonic()
     panel.run()
     assert time.monotonic() - started < 0.5  # すぐ戻る
@@ -70,6 +74,22 @@ def test_decompose_does_not_block(qtbot, win, slow_server):
     assert "dresi(道)" in out and "「外側」 は既存語にない" in out and "基本詞の候補" in out
     assert panel.status.text().startswith("終わった")
     assert len(list((win.project.llm_log_dir).glob("*-decompose.json"))) == 1  # 履歴が残る
+    sent = slow_server.requests[-1][2]["messages"][0]["content"]
+    assert "【意味・説明】グラフの外側を通る道" in sent and "【分野】グラフ理論" in sent and "【区別したい意味】屋外の道路" in sent
+    panel.action.setCurrentIndex(3)
+    assert panel.concept_box.isHidden()  # ほかの処理では出さない
+
+
+def test_decompose_prompt_only_from_panel(qtbot, win):
+    panel = win.language_docks[("pute", "造語")].widget()
+    panel.action.setCurrentIndex(7)
+    panel.input.setText("重力 加速度")
+    panel.field.setText("物理学")
+    panel.prompt_only.setChecked(True)
+    panel.run()
+    qtbot.waitUntil(lambda: not panel.running, timeout=5000)
+    out = panel.output.toPlainText()
+    assert "【造語したい概念】重力 加速度" in out and "【分野】物理学" in out
 
 
 def test_decompose_cancel(qtbot, win, slow_server):

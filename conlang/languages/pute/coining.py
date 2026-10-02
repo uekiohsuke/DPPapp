@@ -497,6 +497,15 @@ LLM_RULES = """\
 - 既存語で表せるものは、必ず既存語を使う。同じ意味の新しい語は作らない
 - 既存の複合語(辞書にある見出し語)も、1つの部品として使ってよい
 - 既存語で表せない要素だけを「未収録」とし、新しく基本詞を作る候補として挙げる
+
+「分解」とは、ピュテ語でその概念をどう組み立てるかを考えることで、日本語の語を分けることではない。
+- 日本語の漢字や形態素で分けない。たとえば「次数」は「次」と「数」ではなく、グラフの「辺の数」なので 辺-数 になる。
+  「女性」は「女」と「性」ではなく 生物-内、「孤立点」は 節点-外 になる
+- 概念の中身(何であるか、何によって決まるか)から、大本の概念と、それを限定する要素を選ぶ
+- 【意味・説明】があれば、日本語の語の一般的な意味より、そちらを優先する
+- 【分野】があれば、その分野での意味として考える(同じ日本語でも、分野によって指すものが違う)
+- 【区別したい意味】に書かれた意味は、指していない。その意味の部品を選ばない
+- 下の【既存語の作り方の例】は、この辞書で実際に作られた複合語。組み立て方の参考にする
 """
 
 LLM_SCHEMA = """\
@@ -504,6 +513,7 @@ LLM_SCHEMA = """\
 
 {
   "concept": "造語したい概念",
+  "interpretation": "この概念をどういう意味だと解釈したか(1〜2文)。同じ日本語の別の意味と取り違えていないか、本人が確かめるため",
   "elements": [
     {
       "role": "核" または "修飾",
@@ -522,15 +532,35 @@ LLM_SCHEMA = """\
 """
 
 
+@dataclass
+class ConceptRequest:
+    """LLM に分解させる概念と、その説明(日本語の同字異義や、分野による意味の違いを避けるため)"""
+    concept: str
+    description: str = ""   # 意味・説明。ピュテ語でどういう概念にしたいか
+    field: str = ""         # 分野(グラフ理論、物理学 など)
+    distinguish: str = ""   # 区別したい意味(同じ日本語で、指していないもの)
+    memo: str = ""          # そのほかの補足
+
+    def text(self) -> str:
+        """関係する語を探すときに使う文字列"""
+        return " ".join(x for x in (self.concept, self.description, self.field) if x)
+
+
+def _relevance(p: Part, text: str) -> int:
+    return sum(1 for m in p.meanings if m and (m in text or (len(m) >= 2 and any(ch in text for ch in m))))
+
+
 def inventory_lines(c: Coiner, concept: str | None = None, limit: int = 400) -> list[str]:
-    """LLM に渡す辞書の一覧。語数が多いときは、概念の文字列に関係する語を優先して limit 語に絞る"""
+    """LLM に渡す辞書の一覧。語数が多いときは、概念(と説明)に関係する語を優先して limit 語に絞る"""
     heads = [p for p in c.parts if p.kind == HEAD]
     if len(heads) > limit and concept:
-        heads = sorted(heads, key=lambda p: -sum(1 for m in p.meanings if m and (m in concept or concept in m)))[:limit]
+        heads = sorted(heads, key=lambda p: -_relevance(p, concept))[:limit]
     lines = []
     for p in heads:
         short = [q.form for q in c.parts if q.head == p.head and q.kind == SHORT]
         row = f"{p.form} | {'/'.join(p.meanings)}"
+        if p.kinds:
+            row += f" | 区分: {'・'.join(p.kinds)}"
         if short:
             row += " | 短縮形: " + ",".join(short)
         if p.ety:
@@ -539,11 +569,35 @@ def inventory_lines(c: Coiner, concept: str | None = None, limit: int = 400) -> 
     return lines
 
 
-def build_decompose_prompt(c: Coiner, concept: str, memo: str = "") -> str:
-    out = [LLM_RULES, "【辞書(見出し語 | 訳語 | 短縮形 | 構成)】", *inventory_lines(c, concept), "",
-           LLM_SCHEMA, f"【造語したい概念】{concept}"]
-    if memo:
-        out.append(f"【補足】{memo}")
+def compound_examples(c: Coiner, text: str = "", limit: int = 30) -> list[str]:
+    """辞書の複合語で、語源欄に構成と意味がある語を、作り方の例にする(関係しそうなものを先に)"""
+    out = []
+    for p in c.heads.values():
+        w = c.d.get(p.word_id)
+        segs = etymology_structure(w) if w else None
+        if not segs:
+            continue
+        lines = p.ety.split("\n")
+        gloss = lines[1].strip() if len(lines) > 1 else ""
+        meaning = "/".join(p.meanings[:2])
+        out.append((_relevance(p, text) if text else 0,
+                    f"{meaning}: {p.form} = {'-'.join(segs)}" + (f"({gloss})" if gloss else "")))
+    out.sort(key=lambda x: -x[0])
+    return [s for _, s in out[:limit]]
+
+
+def build_decompose_prompt(c: Coiner, req: ConceptRequest | str, memo: str = "") -> str:
+    if isinstance(req, str):
+        req = ConceptRequest(req, memo=memo)
+    out = [LLM_RULES, "【辞書(見出し語 | 訳語 | 区分 | 短縮形 | 構成)】", *inventory_lines(c, req.text()), ""]
+    examples = compound_examples(c, req.text())
+    if examples:
+        out += ["【既存語の作り方の例(訳語: 綴り = 構成(構成の意味))】", *examples, ""]
+    out += [LLM_SCHEMA, f"【造語したい概念】{req.concept}"]
+    for label, value in (("意味・説明", req.description), ("分野", req.field),
+                         ("区別したい意味", req.distinguish), ("補足", req.memo)):
+        if value.strip():
+            out.append(f"【{label}】{value.strip()}")
     return "\n".join(out)
 
 

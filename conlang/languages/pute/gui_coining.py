@@ -9,7 +9,8 @@ import shlex
 
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
-    QComboBox, QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit, QProgressBar, QPushButton, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit, QProgressBar, QPushButton,
+    QVBoxLayout, QWidget,
 )
 
 from conlang.core import llm
@@ -27,7 +28,8 @@ ACTIONS = [
     ("短縮の候補", "shorten", "部品を空白で区切る  例: eshkiki judra"),
     ("長大語", "long", "文字数(省くと 20)"),
     ("基本詞の候補", "gen", "個数など  例: 10 --seed 1"),
-    ("LLM による分解", "decompose", "造語したい概念  例: 重力加速度(--prompt-only でプロンプトだけ)"),
+    ("LLM による分解", "decompose",
+     "造語したい概念  例: 次数。ピュテ語でどう組み立てるかを考えさせる(日本語の字面では分けない)。説明や分野があると取り違えにくい"),
 ]
 LLM_COMMANDS = {"decompose"}
 
@@ -50,6 +52,29 @@ class CoiningPanel(QWidget):
         self.busy.setTextVisible(False)
         self.busy.hide()
         self.status = QLabel()
+        # LLM による分解の、概念の説明
+        self.description = QPlainTextEdit()
+        self.description.setPlaceholderText("意味・説明: ピュテ語でどういう概念にしたいか。例: グラフで、ある頂点に接続している辺の数")
+        self.description.setMaximumHeight(60)
+        self.field = QLineEdit()
+        self.field.setPlaceholderText("分野 例: グラフ理論")
+        self.distinguish = QLineEdit()
+        self.distinguish.setPlaceholderText("区別したい意味(同じ日本語で、指していないもの) 例: 多項式の次数")
+        self.memo = QLineEdit()
+        self.memo.setPlaceholderText("そのほかの補足(省略可)")
+        self.prompt_only = QCheckBox("プロンプトだけ出す(別のチャットに貼る)")
+        self.concept_box = QWidget()
+        form = QFormLayout(self.concept_box)
+        form.setContentsMargins(0, 0, 0, 0)
+        form.addRow("意味・説明", self.description)
+        row2 = QHBoxLayout()
+        row2.addWidget(self.field)
+        row2.addWidget(self.distinguish, 2)
+        form.addRow("分野・区別", row2)
+        row3 = QHBoxLayout()
+        row3.addWidget(self.memo, 1)
+        row3.addWidget(self.prompt_only)
+        form.addRow("補足", row3)
         self.output = QPlainTextEdit()
         self.output.setReadOnly(True)
         font = QFont("Consolas")
@@ -69,6 +94,7 @@ class CoiningPanel(QWidget):
         lay = QVBoxLayout(self)
         lay.addLayout(row)
         lay.addWidget(self.hint)
+        lay.addWidget(self.concept_box)
         lay.addLayout(status)
         lay.addWidget(self.output)
         self._update_hint()
@@ -84,6 +110,7 @@ class CoiningPanel(QWidget):
 
     def _update_hint(self) -> None:
         name, cmd, text = ACTIONS[self.action.currentIndex()]
+        self.concept_box.setVisible(cmd == "decompose")
         if cmd in LLM_COMMANDS:
             cfg = llm.load_config()
             text += f"\nLLM: {cfg.model or '(未設定。設定 → LLM の設定)'}"
@@ -102,10 +129,20 @@ class CoiningPanel(QWidget):
         if self.running or self.ctx.dictionary is None:
             return
         _, cmd, _ = ACTIONS[self.action.currentIndex()]
-        try:
-            args = shlex.split(self.input.text())
-        except ValueError:
-            args = self.input.text().split()
+        if cmd == "decompose":
+            # 概念は入力欄そのまま(空白を含んでもよい)。説明などは、それぞれの欄から
+            args = [self.input.text().strip()]
+            for opt, value in (("--description", self.description.toPlainText()), ("--field", self.field.text()),
+                               ("--distinguish", self.distinguish.text()), ("--memo", self.memo.text())):
+                if value.strip():
+                    args += [opt, value.strip()]
+            if self.prompt_only.isChecked():
+                args.append("--prompt-only")
+        else:
+            try:
+                args = shlex.split(self.input.text())
+            except ValueError:
+                args = self.input.text().split()
         # 裏で動くあいだに辞書を編集しても乱れないように、写しを渡す
         ctx = Context(copy.deepcopy(self.ctx.dictionary), self.ctx.rules, self.ctx.project)
 

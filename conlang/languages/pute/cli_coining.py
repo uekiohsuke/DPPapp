@@ -8,8 +8,11 @@
   conlang pute long [文字数]            辞書の長大語(既定 20文字以上)と、短縮の候補
   conlang pute gen [個数] [--len N] [--seed N] [--min-vowels N]   新しい基本詞の候補
   conlang pute parts                    部品(見出し語・短縮形・接辞)の一覧
-  conlang pute decompose 概念 [--memo 補足] [--prompt-only | --response FILE]
-                                        LLM に概念を要素へ分解させ、辞書と照らす(接続先は conlang llm config)
+  conlang pute decompose 概念 [--description 意味・説明] [--field 分野] [--distinguish 区別したい意味]
+                         [--memo 補足] [--prompt-only | --response FILE] [--seed N]
+                                        LLM に、ピュテ語でその概念をどう組み立てるかを考えさせ、辞書と照らす
+                                        (日本語の語を字面で分けるのではない。接続先は conlang llm config)
+      例: conlang pute decompose 次数 --field グラフ理論 --description 頂点に接続する辺の数 --distinguish 多項式の次数
 """
 from __future__ import annotations
 
@@ -202,7 +205,11 @@ DECOMPOSE = "decompose"
 
 
 def render_decompose(concept: str, els: list[K.Element], c: K.Coiner, note: str = "", per: int = 5,
-                     seed: int | None = None) -> None:
+                     seed: int | None = None, interpretation: str = "") -> None:
+    if interpretation:
+        print(f"LLM の解釈: {interpretation}")
+        print("  (説明と違う意味に取っていたら、--description / --field / --distinguish で伝え直す)")
+        print()
     names = [f"{e.form}({e.meaning})" if e.form else f"〈{e.meaning}〉" for e in els]
     missing = [e for e in els if not e.form]
     print(f"{concept} は、{','.join(names)} という{len(els)}要素に分解できる(大本の概念が先頭)。")
@@ -234,16 +241,44 @@ def render_decompose(concept: str, els: list[K.Element], c: K.Coiner, note: str 
     print("\n注: 分解の仕方は LLM の提案で、ヒューリスティックなもの。要素と順序は人が決める。")
 
 
+VALUE_OPTIONS = {
+    "--response": "response", "--seed": "seed",
+    "--description": "description", "--desc": "description",
+    "--field": "field",
+    "--distinguish": "distinguish", "--not": "distinguish",
+    "--memo": "memo",
+}
+
+
+def parse_decompose_args(args: list[str]) -> tuple[K.ConceptRequest, dict, bool]:
+    """(概念の依頼, そのほかの値, --prompt-only か)"""
+    values, words, prompt_only = {}, [], False
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "--prompt-only":
+            prompt_only = True
+        elif a in VALUE_OPTIONS and i + 1 < len(args):
+            values[VALUE_OPTIONS[a]] = args[i + 1]
+            i += 1
+        else:
+            words.append(a)
+        i += 1
+    req = K.ConceptRequest(" ".join(words), values.get("description", ""), values.get("field", ""),
+                           values.get("distinguish", ""), values.get("memo", ""))
+    return req, values, prompt_only
+
+
 def cmd_decompose(args, c: K.Coiner, ctx: Context) -> int:
-    resp, memo, seed = _opt(args, "--response"), _opt(args, "--memo") or "", _opt(args, "--seed")
-    skip = {"--prompt-only", "--response", resp, "--memo", memo, "--seed", seed}
-    words = [a for a in args if a not in skip]
-    if not words:
-        print("概念を指定する。例: conlang pute decompose 重力加速度")
+    req, values, prompt_only = parse_decompose_args(args)
+    resp, seed = values.get("response"), values.get("seed")
+    if not req.concept:
+        print("概念を指定する。例: conlang pute decompose 次数 --field グラフ理論 --description 頂点に接続する辺の数")
         return 2
-    concept = " ".join(words)
-    prompt = K.build_decompose_prompt(c, concept, memo)
-    if "--prompt-only" in args:
+    concept = req.concept
+    prompt = K.build_decompose_prompt(c, req)
+    prompt_only = prompt_only or "--prompt-only" in args
+    if prompt_only:
         print(prompt)
         return 0
     model = "(貼り付けた答え)"
@@ -259,7 +294,9 @@ def cmd_decompose(args, c: K.Coiner, ctx: Context) -> int:
             print(f"エラー: {e}")
             return 1
     if ctx.project is not None:
-        saved = llm_log.save_call(ctx.project.llm_log_dir, DECOMPOSE, prompt, text, model=model, concept=concept)
+        saved = llm_log.save_call(ctx.project.llm_log_dir, DECOMPOSE, prompt, text, model=model, concept=concept,
+                                  description=req.description, field=req.field, distinguish=req.distinguish,
+                                  memo=req.memo)
         print(f"(履歴: {saved})")
     from .grammar_check import extract_json
     try:
@@ -268,7 +305,7 @@ def cmd_decompose(args, c: K.Coiner, ctx: Context) -> int:
         print(f"LLM の答えを読めなかった: {err}\n--- 答え ---\n{text}")
         return 1
     render_decompose(data.get("concept", concept), K.ground(c, data), c, data.get("note", ""),
-                     seed=int(seed) if seed else None)
+                     seed=int(seed) if seed else None, interpretation=str(data.get("interpretation", "") or ""))
     return 0
 
 
