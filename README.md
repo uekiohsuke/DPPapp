@@ -9,7 +9,7 @@
 |---|---|---|
 | M0 | 試作の整理 | 済み(`prototype/pute_zougo.py`、`conlang pute ...`) |
 | M1 | コアと辞書(CLI) | 済み |
-| M2 | 辞書の画面 | |
+| M2 | 辞書の画面 | 済み(`conlang gui`) |
 | M3 | 規則の形式を決める | |
 | M4 | 整合性チェック | |
 | M5 | 造語支援 | |
@@ -20,9 +20,21 @@
 
 ```powershell
 python -m venv .venv          # Python 3.11
-.venv\Scripts\python -m pip install -e ".[dev]"
+.venv\Scripts\python -m pip install -e ".[dev,gui]"
 .venv\Scripts\python -m pytest
 ```
+
+## 画面
+
+```powershell
+.venv\Scripts\conlang gui projects\pute    # フォルダを省くと、前に開いたプロジェクトを開く
+```
+
+- 左: 検索と一覧。検索する場所(見出し語・訳語・内容・タグ)と一致のしかたを選べる。内容は「語義」「語源」などの見出しで絞れる。列の見出しを押すと並べ替える
+- 右: 選んだ語の閲覧。「編集」(F2 かダブルクリック)で編集に切り替え、「適用」で辞書に反映する
+- 下: 警告(空の見出し語・訳語なし・同じ綴り・id の重複など)。ダブルクリックでその語へ移動する
+- 「ファイル → 保存」(Ctrl+S)で、プロジェクトの dictionary.json に zpdic 形式で保存する。保存の前に backup\ へバックアップを取る
+- 「ファイル → zpdic 形式で書き出す」で、プロジェクトの外へ書き出せる。「新しい語」は Ctrl+N
 
 ## データの置き場所
 

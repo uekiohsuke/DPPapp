@@ -150,6 +150,14 @@ class Dictionary:
         self.words.append(w)
         return w
 
+    def replace(self, word_id: int, new: dict) -> bool:
+        """同じ位置の項目を new に差し替える"""
+        for i, w in enumerate(self.words):
+            if w["entry"].get("id") == word_id:
+                self.words[i] = new
+                return True
+        return False
+
     def remove(self, word_id: int) -> bool:
         w = self.get(word_id)
         if w is None:

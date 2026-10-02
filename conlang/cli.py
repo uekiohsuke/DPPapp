@@ -5,6 +5,7 @@
   conlang info DIR|FILE                              辞書の項目数などを出す
   conlang save DIR                                   辞書を読んで書き戻す(保存前にバックアップする)
   conlang verify FILE                                読んで書き戻したときに、元と同じになるかを確かめる(書き込まない)
+  conlang gui [DIR]                                  画面を開く(DIR を省くと、前に開いたプロジェクト)
   conlang <言語> [--project DIR | --dict FILE] ...    言語別機能(例: conlang pute find 力)
 """
 from __future__ import annotations
@@ -104,6 +105,15 @@ def cmd_language(lang: registry.LanguageModule, argv: list[str]) -> int:
     return 0
 
 
+def cmd_gui(a) -> int:
+    try:
+        from .gui.app import main as gui_main
+    except ImportError:
+        print('画面には PySide6 が要る: pip install -e ".[gui]"', file=sys.stderr)
+        return 1
+    return gui_main([a.dir] if a.dir else [])
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="conlang", description="人工言語創作アプリ",
                                  formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
@@ -126,6 +136,9 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("verify", help="往復で壊れないか確かめる")
     s.add_argument("file")
     s.set_defaults(func=cmd_verify)
+    s = sub.add_parser("gui", help="画面を開く")
+    s.add_argument("dir", nargs="?")
+    s.set_defaults(func=cmd_gui)
     return ap
 
 
