@@ -1,0 +1,170 @@
+{
+  "words": [
+    {
+      "entry": {
+        "id": 1,
+        "form": "kabo"
+      },
+      "translations": [
+        {
+          "title": "存在概念",
+          "forms": [
+            "節点"
+          ]
+        }
+      ],
+      "tags": [
+        "基本詞"
+      ],
+      "contents": [
+        {
+          "title": "語義",
+          "text": "グラフの点。"
+        }
+      ],
+      "variations": [],
+      "relations": []
+    },
+    {
+      "entry": {
+        "id": 2,
+        "form": "tchu"
+      },
+      "translations": [
+        {
+          "title": "修飾概念",
+          "forms": [
+            "外"
+          ]
+        }
+      ],
+      "tags": [
+        "基本詞"
+      ],
+      "contents": [],
+      "variations": [],
+      "relations": []
+    },
+    {
+      "entry": {
+        "id": 3,
+        "form": "kabotchu"
+      },
+      "translations": [
+        {
+          "title": "存在概念",
+          "forms": [
+            "孤立点"
+          ]
+        }
+      ],
+      "tags": [],
+      "contents": [
+        {
+          "title": "語源",
+          "text": "kabo-tchu\n節点-外"
+        }
+      ],
+      "variations": [],
+      "relations": []
+    },
+    {
+      "entry": {
+        "id": 4,
+        "form": "dresi"
+      },
+      "translations": [
+        {
+          "title": "存在概念",
+          "forms": [
+            "道",
+            "辺"
+          ]
+        }
+      ],
+      "tags": [
+        "基本詞"
+      ],
+      "contents": [],
+      "variations": [],
+      "relations": []
+    },
+    {
+      "entry": {
+        "id": 5,
+        "form": "jetavo"
+      },
+      "translations": [
+        {
+          "title": "数理概念",
+          "forms": [
+            "数",
+            "量"
+          ]
+        }
+      ],
+      "tags": [
+        "基本詞"
+      ],
+      "contents": [],
+      "variations": [
+        {
+          "title": "短縮形",
+          "form": "jeta"
+        }
+      ],
+      "relations": []
+    },
+    {
+      "entry": {
+        "id": 6,
+        "form": "dresijeta"
+      },
+      "translations": [
+        {
+          "title": "数理概念",
+          "forms": [
+            "次数"
+          ]
+        }
+      ],
+      "tags": [],
+      "contents": [
+        {
+          "title": "語源",
+          "text": "dresi-jeta\n辺-数"
+        }
+      ],
+      "variations": [],
+      "relations": [],
+      "unknownField": {
+        "keep": "未知のフィールドも残す"
+      }
+    }
+  ],
+  "zpdic": {
+    "alphabetOrder": "",
+    "wordOrderType": "UNICODE",
+    "punctuations": [
+      ",",
+      "、"
+    ],
+    "defaultWord": {
+      "entry": {
+        "id": -1,
+        "form": ""
+      },
+      "translations": [],
+      "tags": [],
+      "contents": [],
+      "variations": [],
+      "relations": []
+    }
+  },
+  "snoj": null,
+  "extraTopLevel": [
+    1,
+    2.5,
+    true
+  ]
+}

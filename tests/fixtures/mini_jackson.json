@@ -1,0 +1,46 @@
+{
+  "words" : [ {
+    "entry" : {
+      "id" : 1,
+      "form" : "SaKu"
+    },
+    "translations" : [ {
+      "title" : "名詞",
+      "forms" : [ "架空", "見本" ]
+    } ],
+    "tags" : [ "基本" ],
+    "contents" : [ {
+      "title" : "例文",
+      "text" : "SaKu \"引用\"\n架空の例。"
+    } ],
+    "variations" : [ ],
+    "relations" : [ ]
+  }, {
+    "entry" : {
+      "id" : 2,
+      "form" : "NoTa"
+    },
+    "translations" : [ ],
+    "tags" : [ ],
+    "contents" : [ ],
+    "variations" : [ ],
+    "relations" : [ ]
+  } ],
+  "zpdic" : {
+    "alphabetOrder" : "",
+    "informationTitleOrder" : [ "例文", "語法" ],
+    "formFontFamily" : null,
+    "defaultWord" : {
+      "entry" : {
+        "id" : -1,
+        "form" : ""
+      },
+      "translations" : [ ],
+      "tags" : [ ],
+      "contents" : [ ],
+      "variations" : [ ],
+      "relations" : [ ]
+    }
+  },
+  "snoj" : null
+}
