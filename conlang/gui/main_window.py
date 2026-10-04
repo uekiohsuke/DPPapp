@@ -258,6 +258,8 @@ class MainWindow(QMainWindow):
         self.view_menu = m
         m = self.menuBar().addMenu("設定(&S)")
         self._action(m, "LLM の設定…", self.llm_settings_dialog)
+        m.addSeparator()
+        self._action(m, "デスクトップとスタートメニューにショートカットを作る", self.create_shortcuts)
         self.llm_label = QLabel()
         self.statusBar().addPermanentWidget(self.llm_label)
         self._update_llm_label()
@@ -268,6 +270,17 @@ class MainWindow(QMainWindow):
         self.llm_label.setText(f"LLM: {cfg.model or '(未設定)'}" + (f"(考える過程 {cfg.reasoning_effort})"
                                                                    if cfg.reasoning_effort else ""))
         self.llm_label.setToolTip(cfg.url)
+
+    def create_shortcuts(self) -> list[Path]:
+        """前に開いたプロジェクトを開くショートカット(プロジェクトは決め打ちしない)"""
+        from . import shortcut
+        try:
+            made = shortcut.create(shortcut.plan())
+        except OSError as e:
+            self.error(str(e))
+            return []
+        self.inform("ショートカット", "ショートカットを作った:\n" + "\n".join(str(p) for p in made))
+        return made
 
     def llm_settings_dialog(self) -> None:
         from .llm_settings import LLMSettingsDialog

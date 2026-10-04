@@ -14,6 +14,7 @@
   conlang llm config [--url URL] [--model M]         LLM の接続先(OpenAI 互換)を見る・設定する
   conlang llm models | ask "質問"                    接続先のモデルの一覧 / 1回だけ問い合わせる
   conlang gui [DIR]                                  画面を開く(DIR を省くと、前に開いたプロジェクト)
+  conlang shortcut [--project DIR]                   デスクトップとスタートメニューに、画面を起動するショートカットを作る
   conlang <言語> [--project DIR | --dict FILE] ...    言語別機能(例: conlang pute find 力)
 """
 from __future__ import annotations
@@ -261,6 +262,28 @@ def cmd_language(lang: registry.LanguageModule, argv: list[str]) -> int:
     return lang.cli(rest, ctx) or 0
 
 
+def cmd_shortcut(a) -> int:
+    try:
+        from .gui import shortcut
+    except ImportError:
+        print('ショートカットには PySide6 が要る(アイコンを描くため): pip install -e ".[gui]"', file=sys.stderr)
+        return 1
+    items = shortcut.plan(a.name, a.project, desktop=not a.no_desktop, start_menu=not a.no_start_menu)
+    if not items:
+        print("作る場所がない(--no-desktop と --no-start-menu を両方付けた)")
+        return 2
+    try:
+        made = shortcut.create(items)
+    except OSError as e:
+        print(f"エラー: {e}", file=sys.stderr)
+        return 1
+    print(f"ショートカットを作った({items[0].target}" + (f" {items[0].arguments}" if items[0].arguments else "") + "):")
+    for p in made:
+        print(f"  {p}")
+    print(f"  アイコン: {items[0].icon}")
+    return 0
+
+
 def cmd_gui(a) -> int:
     try:
         from .gui.app import main as gui_main
@@ -341,6 +364,12 @@ def build_parser() -> argparse.ArgumentParser:
     t = lsub.add_parser("ask", help="1回だけ問い合わせる(接続の確認用)")
     t.add_argument("prompt")
     t.set_defaults(func=cmd_llm_ask)
+    s = sub.add_parser("shortcut", help="デスクトップとスタートメニューに、画面を起動するショートカットを作る(Windows)")
+    s.add_argument("--project", help="このプロジェクトを開くショートカットにする(省くと、前に開いたプロジェクト)")
+    s.add_argument("--name", default="人工言語創作アプリ", help="ショートカットの名前")
+    s.add_argument("--no-desktop", action="store_true", help="デスクトップには作らない")
+    s.add_argument("--no-start-menu", action="store_true", help="スタートメニューには作らない")
+    s.set_defaults(func=cmd_shortcut)
     s = sub.add_parser("gui", help="画面を開く")
     s.add_argument("dir", nargs="?")
     s.set_defaults(func=cmd_gui)
