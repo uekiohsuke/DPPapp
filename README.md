@@ -1,7 +1,8 @@
 # conlang — 人工言語創作アプリ
 
 自分の人工言語の文法・辞書・造語を1か所で整理して育てるための、自分専用のデスクトップアプリです(PySide6)。
-言語別の機能は、ピュテ語(造語支援・整合性チェック・活用表など)と、ウリ語(基本の部分: 現代の転写、音節、辞書の検査)があります。
+言語別の機能は、ピュテ語(造語支援・整合性チェック・活用表など)、ウリ語(基本の部分: 現代の転写、音節、辞書の検査)、
+ミャミュ語(基本の部分: 音素と音の連なり、動詞の枠での組み立てと分解、数)があります。
 仕様は [conlang-app-spec.md](conlang-app-spec.md) にあります。
 
 ## 進み具合(仕様書 §7)
@@ -119,6 +120,22 @@ conlang uri --project projects\uri analyze LoRoPu          # 接頭辞(lo-)と�
 conlang uri --project projects\uri find 女装
 conlang check projects\uri                                 # 音節に分けられない語(近現代の形には現代の形を添える)、旧表記の大文字の位置、
                                                            # 接頭辞、iyi・Cuwu の並び、情詞の一覧との照合(規則ファイルの checks)
+```
+
+ミャミュ語(`--language myamyu` のプロジェクト。辞書はまだないので、空の辞書から始まる):
+
+```powershell
+conlang new projects\myamyu --name ミャミュ語 --language myamyu
+conlang rules import projects\myamyu data\myamyu-rules.yaml
+conlang grammar import projects\myamyu data\myamyu-grammar.md
+conlang grammar check projects\myamyu                      # 文法 md と規則ファイルの照合
+conlang rules show projects\myamyu                         # 規則ファイルの中の点検(試作の SELF_CHECKS)も出る
+conlang myamyu --project projects\myamyu segment lemjgo    # 音素(sh・mj は1つの子音)
+conlang myamyu --project projects\myamyu sound gaf baz ssa # 音の連なりの規則(→ gabazsa)
+conlang myamyu --project projects\myamyu verb gaz --tense 未来 --voice 受動態 --aspect 起動相 --subject 三人称単数
+conlang myamyu --project projects\myamyu parse ze-gaz-af-ol-esh-ol   # 枠に分ける(同形の ol を位置で読み分ける)
+conlang myamyu --project projects\myamyu affixes           # 接辞の一覧
+conlang myamyu --project projects\myamyu number 7          # 数の語
 ```
 
 辞書は、元のファイルの書式(Python 風の字下げ / zpdic の書き出し形式、改行コード、末尾の改行)に合わせて書き戻すので、

@@ -12,7 +12,8 @@
 
 使い方:  python3 check_rules_docs.py [規則ファイル] [文法 md]
   文法 md を省くと、規則ファイルの grammar_doc に書かれたファイル(規則ファイルと同じ場所)を使う。
-  言語ごとの表の比べ方は、規則ファイルの language で選ぶ(ピュテ語 → PUTE_CHECKS、ウリ語 → URI_CHECKS)。
+  言語ごとの表の比べ方は、規則ファイルの language で選ぶ(ピュテ語 → PUTE_CHECKS、ウリ語 → URI_CHECKS、ミャミュ語 → MYAMYU_CHECKS)。
+  ミャミュ語は、規則ファイルの内部の食い違い(SELF_CHECKS)も表示する。
 """
 import os
 import re
@@ -312,8 +313,212 @@ URI_CHECKS = {
     "history.semivowel": uri_semivowel,
 }
 
+# ---- ミャミュ語 ----
+
+def my_overview(block, rules):
+    md = {k: v for k, v in table_rows(block)}
+    yml = {k: ("、".join(v) if isinstance(v, list) else v) for k, v in rules["overview"]["items"].items()}
+    return diff_maps("基本情報", md, yml)
+
+
+def my_phonemes(block, rules):
+    ph = rules["phonology"]
+    md = {k: [x.strip() for x in v.split(",")] for k, v in table_rows(block)}
+    out = []
+    for label, key in [("母音", "vowels"), ("子音", "consonants")]:
+        out += diff_sets(label, set(md.get(label, [])), set(ph[key]))
+    return out
+
+
+def my_ipa(block, rules):
+    md = {k: re.search(r"/([^/]+)/", v).group(1) for k, v in table_rows(block)}
+    return diff_maps("発音", md, rules["phonology"]["ipa"])
+
+
+def my_forbidden(block, rules):
+    line = next((l for l in block if "存在しない並び" in l), None)
+    if line is None:
+        return ["「存在しない並び:」の行が見つからない"]
+    items = line.split(":", 1)[1].split()
+    out = []
+    if len(items) != len(set(items)):
+        out.append("存在しない並びに重複がある")
+    return out + diff_sets("存在しない並び", set(items), set(rules["phonotactics"]["forbidden_clusters"]))
+
+
+def my_structure(block, rules):
+    names = {"動詞": "verb", "名詞": "noun", "形容詞": "adjective"}
+    md = {names.get(k, k): v.split("-") for k, v in table_rows(block)}
+    yml = rules["morphology"]["structure"]
+    out = []
+    for k in sorted(set(md) | set(yml)):
+        if md.get(k) != yml.get(k):
+            out.append(f"{k} の構成: 文法 md は {md.get(k)}、規則ファイルは {yml.get(k)}")
+    return out
+
+
+def make_slot_table(getter, label, order_getter=None):
+    """名称 | 形 | 意味 の表。規則ファイルは 形: {name, meaning}。order_getter があれば並びも比べる"""
+    def cmp(block, rules):
+        yml = getter(rules)
+        rows = table_rows(block)
+        md = {form: {"name": name, "meaning": meaning} for name, form, meaning in rows}
+        out = []
+        for k in sorted(set(md) | set(yml)):
+            out += diff_maps(f"{label} {k}", md.get(k, {}), yml.get(k, {})) if (k in md and k in yml) else (
+                [f"{label} {k}: 文法 md にだけある"] if k in md else [f"{label} {k}: 規則ファイルにだけある"])
+        if order_getter:
+            md_order = [form for _, form, _ in rows]
+            if md_order != order_getter(rules):
+                out.append(f"{label}の並び: 文法 md は {md_order}、規則ファイルは {order_getter(rules)}")
+        return out
+    return cmp
+
+
+def my_tense_suffix(block, rules):
+    md = {k: v.lstrip("-") for k, v in table_rows(block)}
+    return diff_maps("時制接辞", md, rules["verb"]["tense_suffix"])
+
+
+def my_subject(block, rules):
+    names = {"一人称": "first", "二人称": "second", "三人称": "third", "非人間": "nonhuman"}
+    dash = "—"
+    md = {names.get(r[0], r[0]): {"singular": r[1], "plural": r[2], "indefinite": r[3]} for r in table_rows(block)}
+    yml = {k: {kk: (vv or dash) for kk, vv in v.items()} for k, v in rules["verb"]["subject_marker"].items()}
+    out = []
+    for k in sorted(set(md) | set(yml)):
+        out += diff_maps(f"主語マーカー {k}", md.get(k, {}), yml.get(k, {}))
+    return out
+
+
+def my_numbers(block, rules):
+    md = {d: {"word": w, "short": sh} for d, w, sh in table_rows(block)}
+    yml = {str(d): {"word": v["word"], "short": v["short"]} for d, v in rules["numbers"]["digits"].items()}
+    out = []
+    for k in sorted(set(md) | set(yml), key=int):
+        out += diff_maps(f"数 {k}", md.get(k, {}), yml.get(k, {}))
+    return out
+
+
+def my_quantity(block, rules):
+    ex = rules["usage"]["quantity"]["example"]
+    line = next((l for l in block if "例" in l), "")
+    m = re.search(r"例:\s*(.+?)[(（](.+?)[)）]", line)
+    if not m:
+        return ["数量指定の例の行が読めない"]
+    return diff_maps("数量指定の例", {"form": m.group(1).strip(), "gloss": m.group(2)}, {"form": ex["form"], "gloss": ex["gloss"]})
+
+
+MYAMYU_CHECKS = {
+    "overview": my_overview,
+    "phonology.phonemes": my_phonemes,
+    "phonology.ipa": my_ipa,
+    "phonotactics.forbidden": my_forbidden,
+    "morphology.structure": my_structure,
+    "verb.tense.basic": make_slot_table(lambda r: r["verb"]["tense_basic"], "時制"),
+    "verb.tense.suffix": my_tense_suffix,
+    "verb.voice": make_slot_table(lambda r: r["verb"]["voice"], "態"),
+    "verb.aspect": make_slot_table(lambda r: r["verb"]["aspect"], "相"),
+    "verb.mood": make_slot_table(lambda r: r["verb"]["mood"], "法"),
+    "verb.subject_marker": my_subject,
+    "case.markers": make_slot_table(lambda r: r["case"]["markers"], "格", lambda r: r["case"]["priority_order"]),
+    "numbers": my_numbers,
+    "usage.quantity": my_quantity,
+}
+
+
+# ---- 規則ファイルの内部で気になる点(文法 md とは関係なく、規則ファイルだけを見て調べる)。終了コードには影響しない ----
+
+def segment(word, vowels, consonants):
+    """音素に分ける(2文字の子音を先に取る)。分けられなければ None"""
+    units = sorted(set(vowels) | set(consonants), key=len, reverse=True)
+    out, i = [], 0
+    while i < len(word):
+        u = next((x for x in units if word.startswith(x, i)), None)
+        if u is None:
+            return None
+        out.append(u)
+        i += len(u)
+    return out
+
+
+def myamyu_self(rules):
+    notes = []
+    ph = rules["phonology"]
+    V, C = set(ph["vowels"]), set(ph["consonants"])
+    forbidden = set(rules["phonotactics"]["forbidden_clusters"])
+    verb = rules["verb"]
+
+    # 1. 禁止された並びは、どれも子音2つでできているか
+    for f in sorted(forbidden):
+        seg = segment(f, V, C)
+        if seg is None or len(seg) != 2 or not all(x in C for x in seg):
+            notes.append(f"禁止された並び「{f}」が、子音2つに分けられない: {seg}")
+
+    # 2. 接辞・数の語が、音素に分けられ、禁止された並びを含まないか
+    forms = {}
+    for slot in ["tense_basic", "voice", "aspect", "mood"]:
+        for form in verb[slot]:
+            forms.setdefault(form, []).append(slot)
+    for form in rules["case"]["markers"]:
+        forms.setdefault(form, []).append("case")
+    for person, d in verb["subject_marker"].items():
+        for kind, form in d.items():
+            if form:
+                forms.setdefault(form, []).append(f"subject_marker.{person}")
+    for suf in verb["tense_suffix"].values():
+        forms.setdefault("-" + suf, []).append("tense_suffix")
+    for d, v in rules["numbers"]["digits"].items():
+        forms.setdefault(v["word"], []).append(f"number.{d}")
+    for form in forms:
+        seg = segment(form.lstrip("-"), V, C)
+        if seg is None:
+            notes.append(f"「{form}」が音素に分けられない")
+            continue
+        for a, b in zip(seg, seg[1:]):
+            if a in C and b in C and a + b in forbidden:
+                notes.append(f"「{form}」が禁止された並び「{a + b}」を含む")
+
+    # 3. 概要の格の一覧と、格の表が合うか
+    stated = set(rules["overview"]["items"].get("格", []))
+    listed = {v["name"] for v in rules["case"]["markers"].values()}
+    if stated != listed:
+        notes.append(f"格: 基本情報には {sorted(stated)}、格の表には {sorted(listed)}(差: {sorted(stated ^ listed)})")
+
+    # 4. 派生時制の例が、主となる時制 + 時制接辞 になっているか
+    d = verb["tense_derived"]["example"]
+    base = {v["name"].replace("時制", ""): k for k, v in verb["tense_basic"].items()}
+    expected = base[d["main"]] + verb["tense_suffix"][d["suffix"]]
+    if expected != d["form"]:
+        notes.append(f"派生時制の例 {d['name']}: 例は {d['form']}、{d['main']}時制の形 + 時制接辞 なら {expected}")
+
+    # 5. 数の略形が、語頭の子音か(他の数が従っているパターン)
+    for n, v in rules["numbers"]["digits"].items():
+        seg = segment(v["word"], V, C)
+        if seg and seg[0] != v["short"]:
+            notes.append(f"数 {n}: 略形 {v['short']}、語 {v['word']} の語頭は {seg[0]}(他の数は語頭の子音)")
+
+    # 6. 数量指定の例の数が、数の表と合うか
+    ex = rules["usage"]["quantity"]["example"]
+    word = ex["form"].split()[-1][len("uf"):]
+    digit = next((n for n, v in rules["numbers"]["digits"].items() if v["word"] == word), None)
+    if digit != ex["number"]:
+        notes.append(f"数量指定の例 {ex['form']}: 訳は {ex['number']}、{word} は {digit}")
+
+    # 7. 同じ形が複数の枠で使われていないか(分解するときは枠の位置で区別する)。規則ファイルで認めたものは除く
+    accepted = set(rules["morphology"].get("homographs", {}).get("forms", []))
+    for form, slots in sorted(forms.items()):
+        kinds = {s.split(".")[0] for s in slots}
+        if len(kinds) > 1 and not form.startswith("-") and form not in accepted:
+            notes.append(f"同形「{form}」が複数の枠にある: {slots}(メモ。枠の位置で区別する)")
+    return notes
+
+
+SELF_CHECKS = {"ミャミュ": myamyu_self}
+
+
 # 規則ファイルの language の先頭がこれに一致する言語の表を使う
-REGISTRIES = {"ピュテ": PUTE_CHECKS, "ウリ": URI_CHECKS}
+REGISTRIES = {"ピュテ": PUTE_CHECKS, "ウリ": URI_CHECKS, "ミャミュ": MYAMYU_CHECKS}
 
 
 def pick_registry(rules):
@@ -363,6 +568,16 @@ def main():
             print("  - " + p)
     else:
         print("食い違いは見つからなかった。")
+    lang = str(yaml.safe_load(open(rules_path, encoding="utf-8")).get("language", ""))
+    self_fn = next((fn for prefix, fn in SELF_CHECKS.items() if lang.startswith(prefix)), None)
+    if self_fn:
+        notes = self_fn(yaml.safe_load(open(rules_path, encoding="utf-8")))
+        if not notes:
+            print("\n規則ファイルの内部で気になる点はなかった。")
+        else:
+            print(f"\n規則ファイルの内部で気になる点 {len(notes)} 件(文法 md との食い違いではない。終了コードには影響しない):")
+            for n in notes:
+                print("  - " + n)
     if llm:
         print("\n文章の記述なので、LLM に調べさせる目印(md の該当箇所と、対応する規則を渡す):")
         for a in llm:

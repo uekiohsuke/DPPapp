@@ -143,6 +143,25 @@ def test_uri_display_switch(win, tmp_path):
     assert any("近現代の形" in t for t in issues)
 
 
+def test_empty_project(win, tmp_path):
+    """辞書が空のプロジェクト(新しく作ったばかり)でも、一覧・警告・保存が動く。空の辞書を「辞書がない」と取り違えない"""
+    p = Project.create(tmp_path / "空", "ミャミュ語", "myamyu")
+    p.import_rules(FIXTURES / "mini_myamyu_rules.yaml")
+    assert win.open_project(p.root)
+    assert win.count_label.text() == "0 / 0 項目"
+    assert win.issue_dock.windowTitle() == "警告(誤り 0件・注意 0件)"
+    assert "ミャミュ語の規則としての点検: 問題なし" in win.rules_panel.summary.text()
+    win.new_word()
+    win.editor.form.setText("kapta")  # 存在しない並び pt
+    win.editor.translations.add_row("", "架空")
+    win.editor.apply_button.click()
+    assert win.count_label.text() == "1 / 1 項目"
+    assert any("存在しない並び pt" in win.issue_list.item(i).text() for i in range(win.issue_list.count()))
+    assert win.save()
+    from conlang.core.zpdic import Dictionary
+    assert [w["entry"]["form"] for w in Dictionary.load(p.dictionary_path).words] == ["kapta"]
+
+
 def test_import_grammar_from_menu(win, tmp_path):
     uri = make_project(tmp_path, "ウリ語", "uri", FIXTURES / "mini_uri.json")
     win.open_project(uri.root)

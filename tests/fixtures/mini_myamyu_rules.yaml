@@ -1,0 +1,89 @@
+# テスト用の架空の規則ファイル(形は myamyu-rules.yaml と同じ。音素や接辞の中身は架空)
+language: ミャミュ語(テスト)
+grammar_doc: mini-myamyu-grammar.md
+
+overview:
+  status: 決定
+  ref: overview
+  items:
+    形態: 膠着語
+    格: [主格, 処格]
+
+phonology:
+  status: 決定
+  ref: {phonemes: phonology.phonemes, ipa: phonology.ipa}
+  vowels: [a, i, o, u]
+  consonants: [p, t, k, s, m, ny, f]
+  digraphs: [ny]
+  ipa: {ny: "ɲ"}
+  counts: {vowel: 4, consonant: 7}
+
+phonotactics:
+  status: 決定
+  ref: {forbidden: phonotactics.forbidden}
+  same_consonant_run: merge
+  forbidden_clusters: [pt, tk, nyk]
+  on_forbidden_cluster: {status: 決定, action: drop_first_consonant}
+
+morphology:
+  status: 決定
+  ref: {structure: morphology.structure}
+  structure:
+    verb: [時制, 語幹, 態, 相, 法, 主語マーカー]
+    noun: [格マーカー, 語幹]
+  homographs: {status: 決定, forms: [ak, ok], resolution: slot_position}
+
+verb:
+  status: 決定
+  ref: {tense_basic: verb.tense.basic, tense_suffix: verb.tense.suffix, voice: verb.voice, aspect: verb.aspect,
+        mood: verb.mood, subject_marker: verb.subject_marker}
+  tense_basic:
+    ma: {name: 未来時制, meaning: 架空の未来}
+    pi: {name: 過去時制, meaning: 架空の過去}
+  tense_suffix: {未来: s, 過去: p}
+  tense_derived:
+    status: 決定
+    example: {name: 大未来, form: mas, main: 未来, suffix: 未来}
+  voice:
+    ot: {name: 能動態, meaning: 架空の能動}
+    ak: {name: 受動態, meaning: 架空の受動}
+  aspect:
+    is: {name: 完了相, meaning: 架空の完了}
+    ok: {name: 起動相, meaning: 架空の起動}
+  mood:
+    am: {name: 命令法, meaning: 架空の命令}
+  subject_marker:
+    first: {singular: ik, plural: iks, indefinite: null}
+    third: {singular: ok, plural: oks, indefinite: okso}
+
+case:
+  status: 決定
+  ref: {markers: case.markers}
+  priority_order: [ta, ak]
+  markers:
+    ta: {name: 主格, meaning: 架空の主体}
+    ak: {name: 処格, meaning: 架空の場所}
+
+numbers:
+  status: 決定
+  ref: numbers
+  digits:
+    0: {word: tia, short: t}
+    1: {word: kia, short: k}
+
+usage:
+  status: 決定
+  ref: {quantity: usage.quantity}
+  quantity:
+    example: {form: momo ufkia, gloss: 一つの架空のもの, number: 1}
+
+word_order:
+  status: 決定
+  ref: word_order
+  d_id: {status: メモ, meaning: 未確認}
+
+checks:
+  - {id: phoneme_segmentation, status: 決定}
+  - {id: forbidden_cluster, status: 決定}
+  - {id: same_consonant_merge, status: 決定}
+  - {id: verb_slot_parse, status: 決定}

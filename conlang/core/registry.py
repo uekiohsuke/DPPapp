@@ -66,7 +66,7 @@ class LanguageModule:
 _modules: dict[str, LanguageModule] = {}
 
 # 同梱の言語別機能。import するとそれぞれが register() を呼ぶ
-BUILTIN = ("conlang.languages.pute", "conlang.languages.uri")
+BUILTIN = ("conlang.languages.pute", "conlang.languages.uri", "conlang.languages.myamyu")
 
 
 def register(module: LanguageModule) -> None:

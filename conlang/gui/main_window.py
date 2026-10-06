@@ -537,7 +537,7 @@ class MainWindow(QMainWindow):
         return True
 
     def save(self) -> bool:
-        if not self.project or not self.dictionary:
+        if self.project is None or self.dictionary is None:
             return False
         if self.stack.currentWidget() is self.editor:
             self.error("編集中の項目がある。適用するか取り消してから保存する")
@@ -622,7 +622,7 @@ class MainWindow(QMainWindow):
         )
 
     def refresh_list(self) -> None:
-        if not self.dictionary:
+        if self.dictionary is None:
             return
         self.content_title_box.setEnabled(self.target_checks[S.CONTENT].isChecked())
         keep = self.current_id
@@ -652,7 +652,7 @@ class MainWindow(QMainWindow):
 
     def _show(self, word_id) -> None:
         self.current_id = word_id
-        w = self.dictionary.get(word_id) if (self.dictionary and word_id is not None) else None
+        w = self.dictionary.get(word_id) if (self.dictionary is not None and word_id is not None) else None
         self.viewer.setHtml(word_view.render(w, self.dictionary, self.model.display) if w
                             else "<p style='color:#999'>項目を選ぶ</p>")
         self.edit_button.setEnabled(w is not None)
@@ -669,14 +669,14 @@ class MainWindow(QMainWindow):
     # ---------- 編集 ----------
 
     def edit_current(self) -> None:
-        w = self.dictionary.get(self.current_id) if self.dictionary and self.current_id is not None else None
+        w = self.dictionary.get(self.current_id) if self.dictionary is not None and self.current_id is not None else None
         if w is None:
             return
         self.editing_new = None
         self._begin_edit(w, f"編集: {form(w)}(id {w['entry'].get('id')})")
 
     def new_word(self) -> None:
-        if not self.dictionary:
+        if self.dictionary is None:
             return
         template = (self.dictionary.data.get("zpdic") or {}).get("defaultWord") or {}
         w = copy.deepcopy(template) or {"entry": {}}
@@ -727,7 +727,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("適用した(まだ保存していない)" + ("。注意: " + " / ".join(msg) if msg else ""), 10000)
 
     def delete_current(self) -> None:
-        w = self.dictionary.get(self.current_id) if self.dictionary and self.current_id is not None else None
+        w = self.dictionary.get(self.current_id) if self.dictionary is not None and self.current_id is not None else None
         if w is None:
             return
         if self.ask("削除", f"{form(w)}(id {w['entry'].get('id')})を削除するか?") != QMessageBox.Yes:
@@ -744,7 +744,7 @@ class MainWindow(QMainWindow):
     def refresh_issues(self):
         """辞書の警告と整合性チェック(共通と言語別)。誤りを先に出す"""
         self.issue_list.clear()
-        if not self.dictionary:
+        if self.dictionary is None:
             return []
         issues = check_all(self.dictionary, self.rules, registry.get(self.project.language if self.project else None))
         issues.sort(key=lambda i: i.level != ERROR)

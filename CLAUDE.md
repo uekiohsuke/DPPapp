@@ -26,7 +26,9 @@
 - 造語支援は `conlang/languages/pute/coining.py`(規則ファイルから動くエンジン。結果はデータで返す)と `cli_coining.py`(表示)。試作 `prototype/pute_zougo.py` が更新されたら、その変更をエンジンに移す。規則の解釈は `lang.py`(PuteLang)に集め、整合性チェックと共有する
 - 言語別の画面部品は registry の `gui_panels` から足す(ピュテ語は `gui_coining.py`)。土台の画面に言語別のコードを書かない
 - ウリ語は `conlang/languages/uri/`(基本の部分: 旧表記 → 現代の転写、音節 CV/CVn/CVng、接頭辞、辞書の検査、文法 md との照合)。辞書は旧表記で時代も混在するので、ウリ語の検査はすべて「注意」。規則は `data/uri-rules.yaml`(本人が書いたもの)。検査は規則ファイルの `checks` にあるものだけ行う
-- 文法 md と規則ファイルの照合の進め方は `core/grammar_check.py`(言語共通)。言語ごとに違うのは表の比べ方だけで、registry の `grammar_table_checks` に置く(ピュテ語 `pute/grammar_check.py`、ウリ語 `uri/grammar_check.py`。試作 `prototype/check_rules_docs.py` の PUTE_CHECKS / URI_CHECKS に対応)
+- ミャミュ語は `conlang/languages/myamyu/`(音素と音の連なり、動詞の枠 時制-語幹-態-相-法-主語マーカー、数、規則ファイルの中の点検 = 試作の SELF_CHECKS を registry の `check_rules` に)。規則ファイルがないと動かない(初期値を持たない)。どの枠を省けるか、数の位取りなど、文法 md にないことは決めない
+- 空の辞書(項目0件)は Python では偽になる(`Dictionary.__len__`)。「辞書がない」は `is None` で判定する
+- 文法 md と規則ファイルの照合の進め方は `core/grammar_check.py`(言語共通)。言語ごとに違うのは表の比べ方だけで、registry の `grammar_table_checks` に置く(ピュテ語 `pute/grammar_check.py`、ウリ語 `uri/grammar_check.py`、ミャミュ語 `myamyu/grammar_check.py`。試作 `prototype/check_rules_docs.py` の PUTE_CHECKS / URI_CHECKS / MYAMYU_CHECKS に対応)
 - 見出し語の表示の切り替え(仕様書 4.9)は registry の `transcriptions`。辞書の綴りは書き換えない
 - クラス接頭辞(辞書で区分が「クラス」の語。scha など)は分野を区別するための接頭辞で、核にはならない(本人の決定)
 - 画面で LLM など時間のかかる処理は、`conlang/gui/tasks.py` の `run_task` で裏のスレッドに出し、画面を止めない。裏の処理では画面の部品に触らず、辞書は写しを渡す。出力を集めるときは `capture`(スレッドごと。`contextlib.redirect_stdout` はスレッドをまたいで混ざるので使わない)
