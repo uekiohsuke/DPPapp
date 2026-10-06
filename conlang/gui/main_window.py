@@ -688,7 +688,11 @@ class MainWindow(QMainWindow):
         self._begin_edit(w, "新しい語")
 
     def _begin_edit(self, w: dict, heading: str) -> None:
-        self.editor.load(to_fields(w, self.dictionary), heading, separator(self.dictionary))
+        # 区分・見出しは、辞書に既にあるものから選べる(新しいものも書ける)
+        d = self.dictionary
+        self.editor.set_title_options(S.titles(d, "translations"), S.titles(d, "contents"),
+                                      S.titles(d, "variations"), S.titles(d, "relations"))
+        self.editor.load(to_fields(w, d), heading, separator(d))
         self.stack.setCurrentWidget(self.editor)
         self.left_panel.setEnabled(False)
         for a in (self.new_word_action, self.edit_action, self.delete_action, self.import_action):

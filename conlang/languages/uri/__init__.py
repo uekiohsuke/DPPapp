@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from conlang.core import grammar_check as GC
-from conlang.core.registry import Context, LanguageModule, register
+from conlang.core.registry import Command, Context, LanguageModule, register
 from conlang.core.zpdic import form, meanings
 
 from . import consistency, grammar_check
@@ -110,7 +110,15 @@ def _modern(rules):
     return lang.to_modern
 
 
-register(LanguageModule(id="uri", name="ウリ語", cli=_cli, check_dictionary=consistency.check_dictionary,
+COMMANDS = (
+    Command("analyze", "接頭辞と辞書で読む", "語(旧表記でも現代の転写でもよい。空白で区切って複数)", "LoRoPu SuKaHuDu", True),
+    Command("modern", "現代の転写にする", "辞書の旧表記の語", "SuKaHuDu FoTONe"),
+    Command("syllables", "音節に分ける", "語(旧表記でも現代の転写でもよい)", "KanTi ReWing"),
+    Command("find", "訳語から探す", "キーワード", "女装", True),
+    Command("particles", "情詞の一覧", "(引数なし)", "", True),
+)
+
+register(LanguageModule(id="uri", name="ウリ語", cli=_cli, commands=COMMANDS, check_dictionary=consistency.check_dictionary,
                         similar_min_length=7,  # CV の短い語が多く、4文字で1文字違いは普通にある
                         grammar_table_checks=grammar_check.TABLE_CHECKS,
                         transcriptions={"現代の転写": _modern}))

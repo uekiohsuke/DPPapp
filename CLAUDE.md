@@ -25,6 +25,7 @@
 - LLM は OpenAI 互換の API を `core/llm.py` で呼ぶ。本人の環境はローカルの Ollama(http://192.168.0.178:11434/v1)。接続先とモデルは利用者の設定(%APPDATA%\conlang\llm.json、`conlang llm config`)で、リポジトリに書かない。テストは偽のサーバーで行い、本物の LLM を前提にしない
 - 造語支援は `conlang/languages/pute/coining.py`(規則ファイルから動くエンジン。結果はデータで返す)と `cli_coining.py`(表示)。試作 `prototype/pute_zougo.py` が更新されたら、その変更をエンジンに移す。規則の解釈は `lang.py`(PuteLang)に集め、整合性チェックと共有する
 - 言語別の画面部品は registry の `gui_panels` から足す(ピュテ語は `gui_coining.py`)。土台の画面に言語別のコードを書かない
+- 言語の CLI のコマンドを画面から呼べるようにするには、registry の `commands`(`Command`)に宣言する。規則欄の「言語の機能」タブ(`gui/language_tools.py`)が、どの言語でも同じ形で出す
 - ウリ語は `conlang/languages/uri/`(基本の部分: 旧表記 → 現代の転写、音節 CV/CVn/CVng、接頭辞、辞書の検査、文法 md との照合)。辞書は旧表記で時代も混在するので、ウリ語の検査はすべて「注意」。規則は `data/uri-rules.yaml`(本人が書いたもの)。検査は規則ファイルの `checks` にあるものだけ行う
 - ミャミュ語は `conlang/languages/myamyu/`(音素と音の連なり、動詞の枠 時制-語幹-態-相-法-主語マーカー、数、規則ファイルの中の点検 = 試作の SELF_CHECKS を registry の `check_rules` に)。規則ファイルがないと動かない(初期値を持たない)。どの枠を省けるか、数の位取りなど、文法 md にないことは決めない
 - 空の辞書(項目0件)は Python では偽になる(`Dictionary.__len__`)。「辞書がない」は `is None` で判定する

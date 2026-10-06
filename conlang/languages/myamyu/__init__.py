@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from conlang.core import grammar_check as GC
-from conlang.core.registry import Context, LanguageModule, register
+from conlang.core.registry import Command, Context, LanguageModule, register
 from conlang.core.rules import RulesError
 
 from . import consistency, grammar_check
@@ -129,6 +129,16 @@ def _cli(argv: list[str], ctx: Context) -> int:
     return 2
 
 
-register(LanguageModule(id="myamyu", name="ミャミュ語", cli=_cli, check_rules=grammar_check.check_rules,
+COMMANDS = (
+    Command("verb", "動詞を組み立てる", "語幹と、枠ごとの接辞(形でも名前でもよい)",
+            "gaz --tense 未来 --voice 受動態 --aspect 起動相 --mood 希求法 --subject 三人称単数"),
+    Command("parse", "動詞を枠に分ける", "動詞の形(ハイフンで区切ってもよい。空白で区切って複数)", "ze-gaz-af-ol-esh-ol"),
+    Command("sound", "音の連なりの規則を当てる", "部品(空白かハイフンで区切る)", "gaf baz ssa"),
+    Command("segment", "音素に分ける", "語(空白で区切って複数)", "lemjgo ufzae"),
+    Command("affixes", "接辞の一覧", "(引数なし)"),
+    Command("number", "数の語", "数(0〜9。空白で区切って複数)", "3 7"),
+)
+
+register(LanguageModule(id="myamyu", name="ミャミュ語", cli=_cli, commands=COMMANDS, check_rules=grammar_check.check_rules,
                         check_dictionary=consistency.check_dictionary,
                         grammar_table_checks=grammar_check.TABLE_CHECKS))

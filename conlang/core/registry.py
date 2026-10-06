@@ -25,11 +25,23 @@ class Context:
 
 
 @dataclass(frozen=True)
+class Command:
+    """画面の「言語の機能」から呼べる、言語別の CLI のコマンド(conlang <言語> <name> 引数…)"""
+    name: str
+    label: str              # 画面に出す名前
+    hint: str = ""          # 引数の説明
+    example: str = ""       # 引数の例(「例を入れる」で入力欄に入る)
+    needs_dictionary: bool = False
+
+
+@dataclass(frozen=True)
 class LanguageModule:
     id: str
     name: str
     # CLI のサブコマンド: (引数, Context)
     cli: Callable[[list[str], Context], int | None] | None = None
+    # 画面の「言語の機能」から呼べるコマンド(cli に渡す)
+    commands: tuple[Command, ...] = ()
     # 規則ファイルそのものの点検。問題を文の一覧で返す
     check_rules: Callable[[Rules], list[str]] | None = None
     # 辞書の言語別の整合性チェック。validate.Issue の一覧を返す

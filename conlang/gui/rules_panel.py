@@ -6,13 +6,14 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QCheckBox, QHBoxLayout, QLabel, QPlainTextEdit, QProgressBar, QPushButton, QSplitter, QTreeWidget,
+    QCheckBox, QHBoxLayout, QLabel, QPlainTextEdit, QProgressBar, QPushButton, QTabWidget, QTreeWidget,
     QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
 from conlang.core import llm, registry
 from conlang.core.rules import SETTLED, Rules
 
+from .language_tools import LanguageToolsPanel
 from .tasks import Task, Ticker, capture, run_task
 
 
@@ -60,19 +61,30 @@ class RulesPanel(QWidget):
         llm_lay.setContentsMargins(0, 0, 0, 0)
         llm_lay.addLayout(row)
         llm_lay.addWidget(self.llm_output)
-        split = QSplitter(Qt.Vertical)
-        split.addWidget(self.tree)
-        split.addWidget(llm_box)
+
+        rules_box = QWidget()
+        rules_lay = QVBoxLayout(rules_box)
+        rules_lay.setContentsMargins(0, 0, 0, 0)
+        rules_lay.addWidget(self.only_unsettled)
+        rules_lay.addWidget(self.tree)
+
+        # 言語別の機能(conlang <言語> … のコマンド)
+        self.tools = LanguageToolsPanel()
+
+        self.tabs = QTabWidget()
+        self.tabs.addTab(rules_box, "規則の状態")
+        self.tabs.addTab(llm_box, "文章を LLM で調べる")
+        self.tabs.addTab(self.tools, "言語の機能")
         lay = QVBoxLayout(self)
         lay.addWidget(self.summary)
-        lay.addWidget(self.only_unsettled)
-        lay.addWidget(split)
+        lay.addWidget(self.tabs, 1)
 
     def set_rules(self, rules: Rules | None, language: str | None, grammar: tuple[str, str] | None = None,
                   ctx: registry.Context | None = None) -> None:
         """grammar: (文法文書の名前, 本文)。あれば、表の食い違いをコードで照合して出す"""
         self.rules, self.language, self.grammar = rules, language, grammar
         self.ctx = ctx or registry.Context(rules=rules)
+        self.tools.set_context(registry.get(language), self.ctx)
         self.refresh()
 
     def _add_problems(self, title: str, problems: list[str]) -> None:
@@ -125,10 +137,10 @@ class RulesPanel(QWidget):
 
     @property
     def running(self) -> bool:
-        return self.task is not None
+        return self.task is not None or self.tools.running
 
     def _run_or_cancel(self) -> None:
-        if self.running:
+        if self.task is not None:
             self.task.cancel()
             self._finish()
             self.llm_status.setText("中止した(LLM の処理は、裏で終わるまで続く。結果は捨てる)")
@@ -137,7 +149,7 @@ class RulesPanel(QWidget):
 
     def run_llm_check(self) -> None:
         lang = registry.get(self.language)
-        if self.running or lang is None or lang.llm_grammar_check is None:
+        if self.task is not None or lang is None or lang.llm_grammar_check is None:
             return
         ctx, force = self.ctx, self.force.isChecked()
         self._model = llm.load_config().model or "LLM"

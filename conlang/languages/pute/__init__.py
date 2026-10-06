@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from conlang.core import grammar_check as GC
-from conlang.core.registry import Context, LanguageModule, register
+from conlang.core.registry import Command, Context, LanguageModule, register
 from conlang.core.rules import Rules, RulesError
 
 from . import cli_coining, consistency, grammar_check
@@ -59,6 +59,18 @@ def _gui_panels():
     return [("造語", gui_coining.make_panel)]
 
 
-register(LanguageModule(id="pute", name="ピュテ語", cli=_cli, check_rules=pute_rules.check_rules,
+COMMANDS = (
+    Command("inflect", "活用表を作る", "品詞(noun / verb / adjective / adverb。省くと全部)と語幹", "noun verb sasxa"),
+    Command("analyze", "形態素分解", "語(空白で区切って複数)", "thaidra kethjadrwoqakushavo", True),
+    Command("check", "組み合わせの検査", "部品(見出し語・短縮形・訳語・接辞)", "節点 外", True),
+    Command("suggest", "組み合わせの提案", "キーワードを大本の概念から順に(--any-order で並べ替える)", "辺 数", True),
+    Command("find", "訳語・語義・語源から探す", "キーワード", "力", True),
+    Command("shorten", "短縮の候補", "部品", "eshkiki judra", True),
+    Command("long", "長大語と短縮案", "文字数(省くと 20)", "", True),
+    Command("gen", "基本詞の候補", "個数など(--len N、--seed N、--min-vowels N)", "10 --seed 1", True),
+    Command("parts", "部品の一覧", "(引数なし)", "", True),
+)
+
+register(LanguageModule(id="pute", name="ピュテ語", cli=_cli, commands=COMMANDS, check_rules=pute_rules.check_rules,
                         check_dictionary=consistency.check_dictionary,
                         grammar_table_checks=grammar_check.TABLE_CHECKS, gui_panels=_gui_panels))

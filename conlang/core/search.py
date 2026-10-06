@@ -84,6 +84,21 @@ def search(d: Dictionary, q: Query) -> list[Hit]:
     return [h for _, _, h in hits]
 
 
+def titles(d: Dictionary, key: str) -> list[str]:
+    """項目の一覧(translations / contents / variations / relations)の title を、よく使われている順に。
+    同じ回数なら辞書に出てくる順。空のものは除く"""
+    from collections import Counter
+    seq = [str(x.get("title", "")) for w in d.words for x in w.get(key, []) if isinstance(x, dict)]
+    counts = Counter(seq)
+    order = {t: i for i, t in enumerate(dict.fromkeys(seq))}
+    return sorted((t for t in counts if t.strip()), key=lambda t: (-counts[t], order[t]))
+
+
+def translation_titles(d: Dictionary) -> list[str]:
+    """辞書の訳語の区分(名詞、存在概念 など)を、よく使われている順に"""
+    return titles(d, "translations")
+
+
 def content_titles(d: Dictionary) -> list[str]:
     """辞書に出てくる内容欄の見出し(出てくる順)"""
     seen = []
